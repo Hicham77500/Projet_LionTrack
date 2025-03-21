@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lion Mindset - Défis Personnels</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="css/lion-theme.css">
+  <link rel="stylesheet" href="css/challenge-styles.css">
+  <link rel="stylesheet" href="css/modal-styles.css">
+  <link rel="stylesheet" href="css/navbar.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Lion Mindset - Défis Personnels</h1>
+  </header>
+
+  <div class="container">
+    <!-- Citation motivante -->
+    <div class="motivational-quote"></div>
+    
+    <!-- Section d'inscription -->
+    <div id="register-section" class="form-section hidden">
+      <h2><i class="fas fa-user-plus"></i> Inscription</h2>
+      <label>Email:</label>
+      <input id="reg-email" type="text" placeholder="Votre email" />
+      
+      <label>Nom d'utilisateur:</label>
+      <input id="reg-username" type="text" placeholder="Choisissez un nom d'utilisateur" />
+      
+      <label>Mot de passe:</label>
+      <input id="reg-password" type="password" placeholder="Votre mot de passe" />
+      
+      <button id="register-btn"><i class="fas fa-sign-in-alt"></i> S'inscrire</button>
+      <p>Déjà inscrit? <a href="#" id="switch-to-login">Se connecter</a></p>
+    </div>
+
+    <!-- Section de connexion -->
+    <div id="auth-section" class="form-section">
+      <h2><i class="fas fa-lock"></i> Connexion</h2>
+      <label>Email:</label>
+      <input id="login-email" type="text" placeholder="Votre email" />
+      
+      <label>Mot de passe:</label>
+      <input id="login-password" type="password" placeholder="Votre mot de passe" />
+      
+      <button id="login-btn"><i class="fas fa-sign-in-alt"></i> Se connecter</button>
+      <p>Pas encore de compte? <a href="#" id="switch-to-register">S'inscrire</a></p>
+    </div>
+
+    <!-- Section des défis (cachée tant que l'utilisateur n'est pas connecté) -->
+    <div id="challenge-section" class="form-section hidden">
+      <!-- Le contenu sera chargé dynamiquement par le module challenge-ui.js -->
+    </div>
+  </div>
+
+  <!-- Chargement des scripts JS -->
+  <script src="js/auth-ui.js"></script>
+  <script src="js/chart-manager.js"></script>
+  <script src="js/rank-system.js"></script>
+  <script src="js/challenge-ui.js"></script>
+</body>
+</html>

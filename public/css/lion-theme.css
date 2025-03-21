@@ -1,0 +1,213 @@
+:root {
+    --dark-red: #880000;
+    --medium-red: #aa0000;
+    --light-red: #cc0000;
+    --dark-bg: #121212;
+    --card-bg: #1e1e1e;
+    --text-color: #f0f0f0;
+    --accent-gold: #d4af37;
+  }
+  
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--dark-bg);
+    color: var(--text-color);
+    line-height: 1.6;
+  }
+  
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  header {
+    background-color: var(--dark-red);
+    color: white;
+    padding: 20px 0;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  header h1 {
+    margin: 0;
+    font-size: 2.5rem;
+    position: relative;
+    z-index: 2;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  }
+  
+  header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('https://images.unsplash.com/photo-1535930891776-0c2dfb7fda1a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80') center/cover;
+    opacity: 0.2;
+    z-index: 1;
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
+  .form-section {
+    background-color: var(--card-bg);
+    padding: 30px;
+    margin-bottom: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border-left: 4px solid var(--medium-red);
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-20px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  
+  h2 {
+    color: var(--light-red);
+    font-size: 1.8rem;
+    margin-top: 0;
+    border-bottom: 2px solid var(--medium-red);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+  
+  h3 {
+    color: var(--accent-gold);
+  }
+  
+  input[type="text"], 
+  input[type="password"], 
+  input[type="number"],
+  textarea,
+  select {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0 20px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background-color: #252525;
+    color: var(--text-color);
+    font-size: 16px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+  }
+  
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--light-red);
+    box-shadow: 0 0 0 2px rgba(204, 0, 0, 0.25);
+    outline: none;
+  }
+  
+  button {
+    background-color: var(--medium-red);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    margin: 10px 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+  }
+  
+  button:hover {
+    background-color: var(--light-red);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  }
+  
+  button:active {
+    transform: translateY(0);
+  }
+  
+  button:disabled {
+    background-color: #666;
+    cursor: not-allowed;
+  }
+  
+  .notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    min-width: 300px;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  
+  .notification.success {
+    background-color: rgba(40, 167, 69, 0.9);
+    border-left: 4px solid #1e7e34;
+  }
+  
+  .notification.error {
+    background-color: rgba(220, 53, 69, 0.9);
+    border-left: 4px solid #bd2130;
+  }
+  
+  .notification.info {
+    background-color: rgba(0, 123, 255, 0.9);
+    border-left: 4px solid #0062cc;
+  }
+  
+  .notification-content {
+    display: flex;
+    align-items: center;
+  }
+  
+  .notification-content i {
+    margin-right: 10px;
+    font-size: 1.2rem;
+  }
+  
+  .motivational-quote {
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+    background-color: rgba(170, 0, 0, 0.2);
+    border-left: 4px solid var(--medium-red);
+    color: var(--accent-gold);
+  }
+  
+  /* Améliorer les performances de rendu */
+  .challenge-card {
+      will-change: transform;
+      contain: content;
+  }
+  
+  /* Accélérer l'animation */
+  @media (prefers-reduced-motion: no-preference) {
+      .challenge-card:hover {
+          transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+      }
+  }
