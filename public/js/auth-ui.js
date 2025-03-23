@@ -216,19 +216,31 @@ const AuthUI = (function() {
     // Gère le processus de déconnexion
     function handleLogout() {
         // Supprimer le token et les infos utilisateur
-        token = null;
-        currentUser = null;
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        currentUser = null;
         
-        // Afficher l'interface de connexion
-        showLoginUI();
+        // Rediriger vers la page de connexion
+        const authSection = document.getElementById('auth-section');
+        const challengeSection = document.getElementById('challenge-section');
         
-        // Notification
-        showNotification('info', "Vous avez été déconnecté");
+        if (authSection) authSection.classList.remove('hidden');
+        if (challengeSection) challengeSection.classList.add('hidden');
+        
+        // Réinitialiser le formulaire de connexion
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) loginForm.reset();
+        
+        // Afficher une notification
+        showNotification('success', 'Vous avez été déconnecté avec succès');
+        
+        // Restaurer l'animation d'entrée
+        if (authSection) {
+            authSection.style.animation = 'fadeIn 0.5s ease-out forwards';
+        }
     }
 
-    // Affiche l'interface pour les utilisateurs authentifiés
+    // Remplacer la fonction showAuthenticatedUI par celle-ci:
     function showAuthenticatedUI() {
         const authSection = document.getElementById('auth-section');
         const registerSection = document.getElementById('register-section');
@@ -238,16 +250,102 @@ const AuthUI = (function() {
         if (registerSection) registerSection.classList.add('hidden');
         if (challengeSection) challengeSection.classList.remove('hidden');
         
-        // Afficher le nom d'utilisateur si disponible
+        // Récupérer l'élément d'affichage utilisateur
         const userDisplay = document.getElementById('user-display');
+        
         if (userDisplay && currentUser) {
+            // Mettre à jour le texte du nom d'utilisateur
             userDisplay.textContent = currentUser.username || currentUser.email;
+            
+            // Créer le conteneur parent s'il n'existe pas déjà
+            let dropdownContainer = userDisplay.closest('.user-dropdown-container');
+            if (!dropdownContainer) {
+                // Créer le conteneur dropdown et encapsuler le user-display
+                dropdownContainer = document.createElement('div');
+                dropdownContainer.className = 'user-dropdown-container';
+                userDisplay.parentNode.insertBefore(dropdownContainer, userDisplay);
+                dropdownContainer.appendChild(userDisplay);
+                
+                // Créer le menu dropdown
+                const dropdownMenu = document.createElement('div');
+                dropdownMenu.className = 'user-dropdown-menu';
+                dropdownMenu.innerHTML = `
+                    <div class="dropdown-item settings-item">
+                        <i class="fas fa-cog"></i>
+                        <span>Paramètres</span>
+                    </div>
+                    <div class="dropdown-item logout-item">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Déconnexion</span>
+                    </div>
+                `;
+                dropdownContainer.appendChild(dropdownMenu);
+                
+                // Ajouter les événements
+                dropdownContainer.addEventListener('mouseenter', function() {
+                    dropdownMenu.classList.add('show');
+                });
+                
+                dropdownContainer.addEventListener('mouseleave', function() {
+                    dropdownMenu.classList.remove('show');
+                });
+                
+                // Configurer les actions des boutons
+                dropdownMenu.querySelector('.settings-item').addEventListener('click', function() {
+                    if (window.ChallengeUI && typeof ChallengeUI.showSettingsModal === 'function') {
+                        ChallengeUI.showSettingsModal();
+                    }
+                    dropdownMenu.classList.remove('show');
+                });
+                
+                dropdownMenu.querySelector('.logout-item').addEventListener('click', handleLogout);
+            }
         }
         
         // Animation d'entrée pour la section challenge
         if (challengeSection) {
             challengeSection.style.animation = 'slideIn 0.5s ease-out forwards';
         }
+    }
+
+    // Ajoutez cette nouvelle fonction pour gérer les événements du menu
+    function setupUserDropdownEvents(dropdown) {
+        const profileContainer = dropdown.querySelector('.profile-container');
+        const dropdownMenu = dropdown.querySelector('.dropdown-menu');
+        const profileItem = dropdown.querySelector('.profile-item');
+        const settingsItem = dropdown.querySelector('.settings-item');
+        const logoutItem = dropdown.querySelector('.logout');
+        
+        // Ouvrir le menu au survol
+        profileContainer.addEventListener('mouseenter', () => {
+            dropdownMenu.classList.add('active');
+        });
+        
+        // Fermer le menu quand on quitte la zone
+        dropdown.addEventListener('mouseleave', () => {
+            dropdownMenu.classList.remove('active');
+        });
+        
+        // Événement pour afficher le profil
+        profileItem.addEventListener('click', () => {
+            dropdownMenu.classList.remove('active');
+            if (window.ChallengeUI && typeof ChallengeUI.showProfileModal === 'function') {
+                ChallengeUI.showProfileModal();
+            }
+        });
+        
+        // Événement pour afficher les paramètres
+        settingsItem.addEventListener('click', () => {
+            dropdownMenu.classList.remove('active');
+            if (window.ChallengeUI && typeof ChallengeUI.showSettingsModal === 'function') {
+                ChallengeUI.showSettingsModal();
+            }
+        });
+        
+        // Événement pour la déconnexion
+        logoutItem.addEventListener('click', () => {
+            handleLogout();
+        });
     }
 
     // Affiche l'interface de connexion pour les utilisateurs non authentifiés

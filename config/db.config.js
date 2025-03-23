@@ -2,5 +2,5 @@
 require('dotenv').config();
 
 module.exports = {
-  url: process.env.MONGODB_URI || 'mongodb://localhost:27017/defisDB'
+  url: process.env.MONGODB_URI || 'mongodb://localhost:3000/defisDB'
 };

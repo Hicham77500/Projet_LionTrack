@@ -60,41 +60,50 @@ const ChallengeUI = (function() {
             });
         }
 
-        // Gérer le menu déroulant du profil
-        const profileDropdown = document.querySelector('.profile-dropdown');
-        if (profileDropdown) {
-            const dropdownMenu = profileDropdown.querySelector('.dropdown-menu');
-            
-            profileDropdown.addEventListener('click', function(e) {
-                // Empêcher la propagation pour éviter que le document.click ferme immédiatement
-                e.stopPropagation();
-                dropdownMenu.classList.toggle('active');
+        // Ajouter des gestionnaires d'événements pour le menu déroulant
+        const profileContainer = document.querySelector('.profile-container');
+        const dropdownMenu = document.querySelector('.dropdown-menu');
+        
+        if (profileContainer && dropdownMenu) {
+            // Ouvrir le menu au survol
+            profileContainer.addEventListener('mouseenter', function() {
+                dropdownMenu.classList.add('active');
             });
             
+            // Fermer le menu quand on quitte la zone
+            const profileDropdown = document.querySelector('.profile-dropdown');
+            if (profileDropdown) {
+                profileDropdown.addEventListener('mouseleave', function() {
+                    dropdownMenu.classList.remove('active');
+                });
+            }
+            
             // Gérer les clics sur les éléments du menu
-            const profileItem = document.querySelector('.dropdown-item:nth-child(1)');
-            const settingsItem = document.querySelector('.dropdown-item:nth-child(2)');
+            const profileItem = dropdownMenu.querySelector('.profile-item');
+            const settingsItem = dropdownMenu.querySelector('.settings-item');
+            const logoutItem = dropdownMenu.querySelector('.logout');
             
             if (profileItem) {
-                profileItem.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    showProfileModal();
+                profileItem.addEventListener('click', function() {
                     dropdownMenu.classList.remove('active');
+                    showProfileModal();
                 });
             }
             
             if (settingsItem) {
-                settingsItem.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    showSettingsModal();
+                settingsItem.addEventListener('click', function() {
                     dropdownMenu.classList.remove('active');
+                    showSettingsModal();
                 });
             }
             
-            // Fermer le menu si on clique ailleurs sur la page
-            document.addEventListener('click', function() {
-                dropdownMenu.classList.remove('active');
-            });
+            if (logoutItem) {
+                logoutItem.addEventListener('click', function() {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.reload();
+                });
+            }
         }
 
         // Les autres boutons dynamiques sont ajoutés lors de la création des cartes
@@ -223,7 +232,7 @@ const ChallengeUI = (function() {
                     <div class="profile-dropdown">
                         <div class="profile-container">
                             <div class="profile-image">
-                                <img src="https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png" alt="Photo de profil">
+                                <img src="${localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png'}" alt="Photo de profil">
                             </div>
                             <div class="profile-info">
                                 <span class="profile-name" id="user-display"></span>
@@ -235,14 +244,17 @@ const ChallengeUI = (function() {
                         </div>
                         
                         <div class="dropdown-menu">
-                            <div class="dropdown-item">
-                                <i class="fas fa-user-circle"></i> Mon profil
+                            <div class="dropdown-item profile-item">
+                                <i class="fas fa-user-circle"></i>
+                                <span>Mon profil</span>
                             </div>
-                            <div class="dropdown-item">
-                                <i class="fas fa-cog"></i> Paramètres
+                            <div class="dropdown-item settings-item">
+                                <i class="fas fa-cog"></i>
+                                <span>Paramètres</span>
                             </div>
-                            <div class="dropdown-item logout" id="logout-btn">
-                                <i class="fas fa-sign-out-alt"></i> Déconnexion
+                            <div class="dropdown-item logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Déconnexion</span>
                             </div>
                         </div>
                     </div>
@@ -1134,13 +1146,302 @@ const ChallengeUI = (function() {
         console.log('Styles chargés via fichiers CSS externes');
     }
 
-    // Initialisation du module
-    function init() {
-        initStyles();
-        if (window.AuthUI && AuthUI.getToken()) {
-            loadChallenges();
+    // Fonction pour afficher la modal de profil
+    function showProfileModal() {
+        const currentUser = window.AuthUI ? AuthUI.getCurrentUser() : JSON.parse(localStorage.getItem('user')) || {};
+        const username = currentUser.username || 'Utilisateur';
+        const email = currentUser.email || '';
+        
+        // Récupérer la photo de profil depuis localStorage ou utiliser l'image par défaut
+        const profilePhoto = localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
+        
+        // Récupérer le grade actuel via RankSystem
+        let currentRank = { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' };
+        if (window.RankSystem && typeof RankSystem.getCurrentRank === 'function') {
+            currentRank = RankSystem.getCurrentRank();
         }
-        setupEventListeners();
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-user-circle"></i> Mon Profil</h3>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="profile-header">
+                        <div class="profile-image-large">
+                            <img src="${profilePhoto}" alt="Photo de profil" id="profile-image-preview">
+                            <input type="file" id="profile-photo-input" accept="image/*" style="display: none;">
+                            <button class="change-photo-btn" id="change-photo-btn"><i class="fas fa-camera"></i></button>
+                        </div>
+                        <div class="profile-details">
+                            <div class="profile-rank-badge">
+                                <img src="${currentRank.icon}" class="rank-insignia-large" alt="Grade">
+                                <h4 class="rank-title">${currentRank.name}</h4>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="profile-username">Nom d'utilisateur:</label>
+                        <input type="text" id="profile-username" value="${username}">
+                    </div>
+                    <div class="form-group">
+                        <label for="profile-email">Email:</label>
+                        <input type="email" id="profile-email" value="${email}" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="profile-bio">Biographie:</label>
+                        <textarea id="profile-bio" placeholder="Parlez-nous de vous...">${localStorage.getItem('userBio') || ''}</textarea>
+                    </div>
+                    <div class="achievement-section">
+                        <h4><i class="fas fa-medal"></i> Réalisations</h4>
+                        <div class="achievements-grid">
+                            <div class="achievement">
+                                <i class="fas fa-trophy"></i>
+                                <span>Premier Défi Complété</span>
+                            </div>
+                            <div class="achievement locked">
+                                <i class="fas fa-lock"></i>
+                                <span>10 Défis Complétés</span>
+                            </div>
+                            <div class="achievement locked">
+                                <i class="fas fa-lock"></i>
+                                <span>Mentalité de Lion</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancel-profile" class="secondary-btn">Annuler</button>
+                    <button id="save-profile" class="primary-btn">Enregistrer</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Gérer le changement de photo de profil
+        const photoInput = modal.querySelector('#profile-photo-input');
+        const changePhotoBtn = modal.querySelector('#change-photo-btn');
+        const imagePreview = modal.querySelector('#profile-image-preview');
+        
+        changePhotoBtn.addEventListener('click', () => {
+            photoInput.click();
+        });
+        
+        photoInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    imagePreview.src = event.target.result;
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+        
+        const closeModal = () => {
+            document.body.removeChild(modal);
+        };
+        
+        modal.querySelector('.close-btn').addEventListener('click', closeModal);
+        modal.querySelector('#cancel-profile').addEventListener('click', closeModal);
+        
+        // Sauvegarder les modifications
+        modal.querySelector('#save-profile').addEventListener('click', async () => {
+            const username = document.getElementById('profile-username').value;
+            const bio = document.getElementById('profile-bio').value;
+            const profilePhoto = imagePreview.src;
+            
+            // Sauvegarder dans localStorage
+            localStorage.setItem('userBio', bio);
+            localStorage.setItem('profilePhoto', profilePhoto);
+            
+            // Mettre à jour l'affichage de la photo dans la navbar
+            const navbarProfileImage = document.querySelector('.profile-image img');
+            if (navbarProfileImage) {
+                navbarProfileImage.src = profilePhoto;
+            }
+            
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('success', 'Profil mis à jour avec succès');
+            }
+            
+            closeModal();
+        });
+    }
+
+    // Fonction pour afficher la modal des paramètres
+    function showSettingsModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-cog"></i> Paramètres</h3>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h4>Apparence</h4>
+                        <div class="form-group">
+                            <label>Thème:</label>
+                            <select id="theme-selector">
+                                <option value="dark-red" selected>Lion Rouge (par défaut)</option>
+                                <option value="dark-blue">Lion Bleu</option>
+                                <option value="dark-gold">Lion Or</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h4>Informations personnelles</h4>
+                        <div class="form-group">
+                            <label for="settings-username">Nom d'utilisateur:</label>
+                            <input type="text" id="settings-username" value="${AuthUI.getCurrentUser().username || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label for="settings-email">Email:</label>
+                            <input type="email" id="settings-email" value="${AuthUI.getCurrentUser().email || ''}" disabled>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section">
+                        <h4>Sécurité</h4>
+                        <div class="form-group">
+                            <button id="change-password-btn" class="secondary-btn">
+                                <i class="fas fa-key"></i> Changer mot de passe
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-section danger-zone">
+                        <h4>Zone de danger</h4>
+                        <div class="form-group">
+                            <button id="logout-btn-settings" class="danger-btn">
+                                <i class="fas fa-sign-out-alt"></i> Se déconnecter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancel-settings" class="secondary-btn">Annuler</button>
+                    <button id="save-settings" class="primary-btn">Enregistrer</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Gestion des événements de la modale
+        const closeModal = () => {
+            document.body.removeChild(modal);
+        };
+        
+        modal.querySelector('.close-btn').addEventListener('click', closeModal);
+        modal.querySelector('#cancel-settings').addEventListener('click', closeModal);
+        
+        // Bouton de déconnexion
+        modal.querySelector('#logout-btn-settings').addEventListener('click', () => {
+            if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
+                AuthUI.handleLogout();
+            } else {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.reload();
+            }
+            closeModal();
+        });
+        
+        // Sauvegarde des paramètres
+        modal.querySelector('#save-settings').addEventListener('click', () => {
+            const username = document.getElementById('settings-username').value;
+            
+            // Mettre à jour l'affichage
+            const userDisplay = document.getElementById('user-display');
+            if (userDisplay) userDisplay.textContent = username;
+            
+            // Mettre à jour dans localStorage
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            user.username = username;
+            localStorage.setItem('user', JSON.stringify(user));
+            
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('success', 'Paramètres enregistrés');
+            }
+            
+            closeModal();
+        });
+    }
+
+    // Fonction pour afficher la modal de changement de mot de passe
+    function showChangePasswordModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-key"></i> Changer de mot de passe</h3>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="current-password">Mot de passe actuel:</label>
+                        <input type="password" id="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-password">Nouveau mot de passe:</label>
+                        <input type="password" id="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm-password">Confirmer le mot de passe:</label>
+                        <input type="password" id="confirm-password">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancel-password" class="secondary-btn">Annuler</button>
+                    <button id="save-password" class="primary-btn">Enregistrer</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const closeModal = () => {
+            document.body.removeChild(modal);
+        };
+        
+        modal.querySelector('.close-btn').addEventListener('click', closeModal);
+        modal.querySelector('#cancel-password').addEventListener('click', closeModal);
+        
+        modal.querySelector('#save-password').addEventListener('click', () => {
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                if (window.AuthUI && AuthUI.showNotification) {
+                    AuthUI.showNotification('error', 'Tous les champs sont obligatoires');
+                }
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                if (window.AuthUI && AuthUI.showNotification) {
+                    AuthUI.showNotification('error', 'Les mots de passe ne correspondent pas');
+                }
+                return;
+            }
+            
+            // Ici, vous pourriez ajouter une requête API pour changer le mot de passe
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('success', 'Mot de passe modifié avec succès');
+            }
+            
+            closeModal();
+        });
     }
 
     // API publique du module
@@ -1150,184 +1451,12 @@ const ChallengeUI = (function() {
         createChallenge,
         updateChallengeProgress,
         editChallenge,
-        deleteChallenge
+        deleteChallenge,
+        showSettingsModal,           // Ajout à l'API publique
+        showProfileModal,            // Ajout à l'API publique
+        showChangePasswordModal      // Ajout à l'API publique
     };
 })();
-
-// Modifier la fonction showProfileModal existante
-function showProfileModal() {
-    const currentUser = window.AuthUI ? AuthUI.getCurrentUser() : JSON.parse(localStorage.getItem('user')) || {};
-    const username = currentUser.username || 'Utilisateur';
-    const email = currentUser.email || '';
-    
-    // Récupérer le grade actuel via RankSystem
-    let currentRank = { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' };
-    if (window.RankSystem && typeof RankSystem.getCurrentRank === 'function') {
-        currentRank = RankSystem.getCurrentRank();
-    }
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-user-circle"></i> Mon Profil</h3>
-                <button class="close-btn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="profile-header">
-                    <div class="profile-image-large">
-                        <img src="https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png" alt="Photo de profil">
-                        <button class="change-photo-btn"><i class="fas fa-camera"></i></button>
-                    </div>
-                    <div class="profile-details">
-                        <div class="profile-rank-badge">
-                            <img src="${currentRank.icon}" class="rank-insignia-large" alt="Grade">
-                            <h4 class="rank-title">${currentRank.name}</h4>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="profile-username">Nom d'utilisateur:</label>
-                    <input type="text" id="profile-username" value="${username}">
-                </div>
-                <div class="form-group">
-                    <label for="profile-email">Email:</label>
-                    <input type="email" id="profile-email" value="${email}" disabled>
-                </div>
-                <div class="form-group">
-                    <label for="profile-bio">Biographie:</label>
-                    <textarea id="profile-bio" placeholder="Parlez-nous de vous..."></textarea>
-                </div>
-                <div class="achievement-section">
-                    <h4><i class="fas fa-medal"></i> Réalisations</h4>
-                    <div class="achievements-grid">
-                        <div class="achievement">
-                            <i class="fas fa-trophy"></i>
-                            <span>Premier Défi Complété</span>
-                        </div>
-                        <div class="achievement locked">
-                            <i class="fas fa-lock"></i>
-                            <span>10 Défis Complétés</span>
-                        </div>
-                        <div class="achievement locked">
-                            <i class="fas fa-lock"></i>
-                            <span>Mentalité de Lion</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="cancel-profile" class="secondary-btn">Annuler</button>
-                <button id="save-profile" class="primary-btn">Enregistrer</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const closeModal = () => {
-        document.body.removeChild(modal);
-    };
-    
-    modal.querySelector('.close-btn').addEventListener('click', closeModal);
-    modal.querySelector('#cancel-profile').addEventListener('click', closeModal);
-    
-    // Sauvegarder les modifications
-    modal.querySelector('#save-profile').addEventListener('click', async () => {
-        const username = document.getElementById('profile-username').value;
-        const bio = document.getElementById('profile-bio').value;
-        
-        // Code pour sauvegarder le profil utilisateur (simulé)
-        if (window.AuthUI && AuthUI.showNotification) {
-            AuthUI.showNotification('success', 'Profil mis à jour avec succès');
-        }
-        
-        closeModal();
-    });
-}
-
-function showSettingsModal() {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-cog"></i> Paramètres</h3>
-                <button class="close-btn">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="settings-section">
-                    <h4>Apparence</h4>
-                    <div class="form-group">
-                        <label>Thème:</label>
-                        <select id="theme-selector">
-                            <option value="dark-red" selected>Lion Rouge (par défaut)</option>
-                            <option value="dark-blue">Lion Bleu</option>
-                            <option value="dark-gold">Lion Or</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="settings-section">
-                    <h4>Notifications</h4>
-                    <div class="setting-toggle">
-                        <label for="notification-toggle">Activer les notifications</label>
-                        <label class="switch">
-                            <input type="checkbox" id="notification-toggle" checked>
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                </div>
-                
-                <div class="settings-section">
-                    <h4>Sécurité</h4>
-                    <div class="form-group">
-                        <button id="change-password-btn" class="secondary-btn">
-                            <i class="fas fa-key"></i> Changer mot de passe
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="settings-section danger-zone">
-                    <h4>Zone de danger</h4>
-                    <div class="form-group">
-                        <button id="delete-account-btn" class="danger-btn">
-                            <i class="fas fa-trash-alt"></i> Supprimer mon compte
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="cancel-settings" class="secondary-btn">Annuler</button>
-                <button id="save-settings" class="primary-btn">Enregistrer</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const closeModal = () => {
-        document.body.removeChild(modal);
-    };
-    
-    modal.querySelector('.close-btn').addEventListener('click', closeModal);
-    modal.querySelector('#cancel-settings').addEventListener('click', closeModal);
-    
-    // Sauvegarder les modifications
-    modal.querySelector('#save-settings').addEventListener('click', () => {
-        const theme = document.getElementById('theme-selector').value;
-        const notificationsEnabled = document.getElementById('notification-toggle').checked;
-        
-        // Code pour sauvegarder les paramètres (simulé)
-        if (window.AuthUI && AuthUI.showNotification) {
-            AuthUI.showNotification('success', 'Paramètres enregistrés avec succès');
-        }
-        
-        closeModal();
-    });
-}
 
 // Initialiser l'UI des défis au chargement du document
 document.addEventListener('DOMContentLoaded', () => {
