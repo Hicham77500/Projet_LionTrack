@@ -1,7 +1,5 @@
 # LionTrack - Application de Suivi des Défis Personnels
 
-![Logo Lion Mindset](https://cdn-icons-png.flaticon.com/512/3575/3575443.png)
-
 ## 📋 À propos du projet
 
 **Lion Mindset** est une application web motivante qui vous aide à suivre vos défis personnels et à développer une mentalité de champion. Avec une interface moderne et intuitive, vous pouvez créer des défis personnalisés, suivre votre progression et célébrer vos réussites.
