@@ -108,9 +108,11 @@
     cursor: pointer;
 }
 
+/* Modifiez ces propriétés pour le menu déroulant */
+
 .dropdown-menu {
     position: absolute;
-    top: calc(100% + 5px);
+    top: calc(100% - 5px); /* Réduire l'espace entre le bouton et le menu */
     right: 0;
     background-color: var(--card-bg);
     border-radius: 8px;
@@ -120,11 +122,22 @@
     z-index: 100;
     overflow: hidden;
     transform-origin: top right;
-    transition: transform 0.2s, opacity 0.2s;
+    transition: transform 0.3s, opacity 0.3s; /* Transition plus lente */
     transform: scale(0.9);
     opacity: 0;
     pointer-events: none;
     border-left: 3px solid var(--accent-gold);
+}
+
+/* Ajoutez une marge interne en haut du menu pour agrandir la zone de clic */
+.dropdown-menu:before {
+    content: '';
+    position: absolute;
+    top: -15px;
+    left: 0;
+    right: 0;
+    height: 15px;
+    background-color: transparent;
 }
 
 /* Utiliser la classe active pour le menu déroulant */
@@ -231,7 +244,7 @@
         gap: 10px;
         padding: 10px;
     }
-    
+
     .navbar-links {
         width: 100%;
         justify-content: center;

@@ -49,17 +49,19 @@
       <p>Pas encore de compte? <a href="#" id="switch-to-register">S'inscrire</a></p>
     </div>
 
-    <!-- Section des défis (cachée tant que l'utilisateur n'est pas connecté) -->
+    <!-- Section des défis -->
     <div id="challenge-section" class="form-section hidden">
-      <!-- Le contenu sera chargé dynamiquement par le module challenge-ui.js -->
+      <button id="create-challenge-btn" class="primary-btn">
+        <i class="fas fa-plus"></i> Créer un nouveau défi
+      </button>
+      <!-- Le reste du contenu sera chargé dynamiquement par challenge-ui.js -->
     </div>
   </div>
 
   <!-- Chargement des scripts JS -->
   <script src="js/auth-ui.js"></script>
-  <script src="js/rank-system.js"></script>
   <script src="js/chart-manager.js"></script>
   <script src="js/challenge-ui.js"></script>
-  <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9251815eeb43dd1a',t:'MTc0Mjc3MDQxMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+  <script src="js/rank-system.js"></script>
 </body>
 </html>

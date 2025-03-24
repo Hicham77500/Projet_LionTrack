@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dbConfig = require('./config/db.config');
 
+// Importation des routes
 const authRoutes = require('./services/auth/auth.routes');
 const userRoutes = require('./services/user/user.routes');
 const challengeRoutes = require('./services/challenge/challenge.routes');
@@ -22,10 +23,10 @@ app.get('/', (req, res) => {
   res.send('Bienvenue sur l\'API Défis Personnels');
 });
 
-// Montage des routes d'API
-app.use('/', authRoutes);
-app.use('/users', userRoutes);
-app.use('/challenges', challengeRoutes);
+// Utilisation des routes
+app.use('/api/auth', authRoutes);
+app.use('/api/challenges', challengeRoutes);
+app.use('/api/users', userRoutes);
 
 // Connexion à MongoDB et démarrage du serveur
 mongoose.connect(dbConfig.url)

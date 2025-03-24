@@ -36,12 +36,30 @@ const AuthUI = (function() {
         const storedUser = localStorage.getItem('user');
         
         if (storedToken && storedUser) {
-            token = storedToken;
-            currentUser = JSON.parse(storedUser);
-            showAuthenticatedUI();
-        } else {
-            showLoginUI();
+            try {
+                token = storedToken;
+                currentUser = JSON.parse(storedUser);
+                
+                // Afficher l'UI authentifiée
+                showAuthenticatedUI();
+                
+                // MODIFICATION ICI : Charger automatiquement les défis lors d'une authentification existante
+                if (window.ChallengeUI && typeof ChallengeUI.loadChallenges === 'function') {
+                    setTimeout(() => {
+                        ChallengeUI.loadChallenges();
+                    }, 100);
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Erreur lors de la vérification de l\'authentification:', error);
+                // En cas d'erreur, supprimer les informations d'authentification
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+            }
         }
+        
+        return false;
     }
 
     // Affiche une citation motivante aléatoire
@@ -159,57 +177,87 @@ const AuthUI = (function() {
         }
     }
 
-    // Gère le processus de connexion
-    async function handleLogin() {
-        // Animation du bouton pour montrer le chargement
-        const loginBtn = document.getElementById('login-btn');
-        const originalText = loginBtn.innerHTML;
-        loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connexion...';
-        loginBtn.disabled = true;
+    // Ajoutez ces fonctions avant handleLogin
 
+    // Affiche l'indicateur de chargement sur un bouton
+    function showLoadingIndicator(buttonId, loadingText) {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.setAttribute('disabled', true);
+            button.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> ${loadingText}`;
+        }
+    }
+
+    // Cache l'indicateur de chargement sur un bouton
+    function hideLoadingIndicator(buttonId, originalText) {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.removeAttribute('disabled');
+            button.textContent = originalText;
+        }
+    }
+
+    // Ensuite, dans handleLogin, assurez-vous que ces fonctions sont utilisées correctement
+    async function handleLogin(event) {
+        event.preventDefault();
+        
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        
+        if (!email || !password) {
+            showNotification('error', 'Veuillez remplir tous les champs');
+            return;
+        }
+        
         try {
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
+            showLoadingIndicator('login-btn', 'Connexion...');
             
-            // Validation des champs
-            if (!email || !password) {
-                throw new Error("Email et mot de passe sont requis");
-            }
-            
-            // Appel API pour la connexion
-            const res = await fetch('/login', {
+            const response = await fetch('/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({ email, password })
             });
             
-            const data = await res.json();
+            const data = await response.json();
             
-            if (!res.ok) {
-                throw new Error(data.message || "Erreur de connexion");
+            if (!response.ok) {
+                throw new Error(data.message || 'Erreur de connexion');
             }
             
             // Stocker le token et les infos utilisateur
             token = data.token;
-            currentUser = data.user || { email };
+            currentUser = data.user;
             
-            // Sauvegarder dans localStorage pour persistance
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(currentUser));
             
-            // Afficher l'interface authentifiée
+            showNotification('success', 'Connexion réussie!');
+            
+            // Afficher l'UI authentifiée
             showAuthenticatedUI();
             
-            // Charger les défis de l'utilisateur
-            if (window.ChallengeUI && typeof window.ChallengeUI.loadChallenges === 'function') {
-                window.ChallengeUI.loadChallenges(token);
+            // MODIFICATION ICI : Charger les défis automatiquement
+            if (window.ChallengeUI && typeof ChallengeUI.loadChallenges === 'function') {
+                // Petit délai pour assurer que l'interface est bien rendue
+                setTimeout(() => {
+                    ChallengeUI.loadChallenges();
+                }, 100);
             }
-        } catch (err) {
-            showNotification('error', err.message);
+            
+            // Attendre que l'interface soit complètement chargée
+            setTimeout(() => {
+                // Charger les défis automatiquement après connexion
+                if (window.ChallengeUI && typeof ChallengeUI.loadChallenges === 'function') {
+                    ChallengeUI.loadChallenges();
+                }
+            }, 300);
+            
+        } catch (error) {
+            showNotification('error', error.message);
         } finally {
-            // Restaurer le bouton
-            loginBtn.innerHTML = originalText;
-            loginBtn.disabled = false;
+            hideLoadingIndicator('login-btn', 'Se connecter');
         }
     }
 
@@ -240,7 +288,8 @@ const AuthUI = (function() {
         }
     }
 
-    // Remplacer la fonction showAuthenticatedUI par celle-ci:
+    // Modifiez la fonction showAuthenticatedUI comme suit
+
     function showAuthenticatedUI() {
         const authSection = document.getElementById('auth-section');
         const registerSection = document.getElementById('register-section');
@@ -250,62 +299,24 @@ const AuthUI = (function() {
         if (registerSection) registerSection.classList.add('hidden');
         if (challengeSection) challengeSection.classList.remove('hidden');
         
-        // Récupérer l'élément d'affichage utilisateur
+        // Mettre à jour l'affichage des informations utilisateur
         const userDisplay = document.getElementById('user-display');
-        
         if (userDisplay && currentUser) {
-            // Mettre à jour le texte du nom d'utilisateur
             userDisplay.textContent = currentUser.username || currentUser.email;
-            
-            // Créer le conteneur parent s'il n'existe pas déjà
-            let dropdownContainer = userDisplay.closest('.user-dropdown-container');
-            if (!dropdownContainer) {
-                // Créer le conteneur dropdown et encapsuler le user-display
-                dropdownContainer = document.createElement('div');
-                dropdownContainer.className = 'user-dropdown-container';
-                userDisplay.parentNode.insertBefore(dropdownContainer, userDisplay);
-                dropdownContainer.appendChild(userDisplay);
-                
-                // Créer le menu dropdown
-                const dropdownMenu = document.createElement('div');
-                dropdownMenu.className = 'user-dropdown-menu';
-                dropdownMenu.innerHTML = `
-                    <div class="dropdown-item settings-item">
-                        <i class="fas fa-cog"></i>
-                        <span>Paramètres</span>
-                    </div>
-                    <div class="dropdown-item logout-item">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Déconnexion</span>
-                    </div>
-                `;
-                dropdownContainer.appendChild(dropdownMenu);
-                
-                // Ajouter les événements
-                dropdownContainer.addEventListener('mouseenter', function() {
-                    dropdownMenu.classList.add('show');
-                });
-                
-                dropdownContainer.addEventListener('mouseleave', function() {
-                    dropdownMenu.classList.remove('show');
-                });
-                
-                // Configurer les actions des boutons
-                dropdownMenu.querySelector('.settings-item').addEventListener('click', function() {
-                    if (window.ChallengeUI && typeof ChallengeUI.showSettingsModal === 'function') {
-                        ChallengeUI.showSettingsModal();
-                    }
-                    dropdownMenu.classList.remove('show');
-                });
-                
-                dropdownMenu.querySelector('.logout-item').addEventListener('click', handleLogout);
-            }
         }
         
-        // Animation d'entrée pour la section challenge
+        // MODIFICATION ICI : S'assurer que la section challenge est visible avant de charger les défis
+        // Cela évite d'avoir à rafraîchir la page
         if (challengeSection) {
             challengeSection.style.animation = 'slideIn 0.5s ease-out forwards';
+            challengeSection.style.display = 'block';
         }
+        
+        // Informer que l'authentification est complète - pour d'autres modules
+        const event = new CustomEvent('userAuthenticated', { 
+            detail: { user: currentUser, token: token } 
+        });
+        document.dispatchEvent(event);
     }
 
     // Ajoutez cette nouvelle fonction pour gérer les événements du menu
@@ -399,12 +410,27 @@ const AuthUI = (function() {
         return currentUser;
     }
 
+    // Ajoutez cette fonction si elle n'existe pas déjà dans AuthUI
+
+    // Fonction pour mettre à jour l'utilisateur courant
+    function updateCurrentUser(userData) {
+        currentUser = { ...currentUser, ...userData };
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        return currentUser;
+    }
+
     // API publique du module
     return {
         init,
+        setupEventListeners,
+        showLoginUI,
+        showAuthenticatedUI,
+        handleLogin,
+        handleLogout,
+        showNotification,
         getToken,
         getCurrentUser,
-        showNotification
+        updateCurrentUser  // Ajoutez cette ligne
     };
 })();
 

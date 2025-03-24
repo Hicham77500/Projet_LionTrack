@@ -1,5 +1,5 @@
 // services/user/user.controller.js
-const User = require('./user.model');  // <-- Chemin corrigé
+const User = require('./user.model'); // Modification du chemin d'importation
 
 exports.getProfile = async (req, res) => {
   try {
@@ -14,16 +14,35 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-exports.updateProfile = async (req, res) => {
+exports.updateUser = async (req, res) => {
   try {
-    const updateData = req.body;
+    // Seul l'utilisateur authentifié peut mettre à jour son propre profil
+    const userId = req.user.id;
+    
+    // Vérifier quels champs sont à mettre à jour
+    const updateData = {};
+    if (req.body.username) updateData.username = req.body.username;
+    if (req.body.email) updateData.email = req.body.email;
+    if (req.body.bio) updateData.bio = req.body.bio;
+    
+    // Mise à jour de l'utilisateur
     const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
+      userId,
       updateData,
-      { new: true }
-    ).select('-password');
-    res.status(200).json({ message: 'Profil mis à jour', user: updatedUser });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+      { new: true, runValidators: true }
+    ).select('-password'); // Ne pas renvoyer le mot de passe
+    
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    
+    // Répondre avec l'utilisateur mis à jour
+    res.status(200).json({
+      message: 'Profil mis à jour avec succès',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du profil:', error);
+    res.status(500).json({ message: error.message || 'Erreur lors de la mise à jour du profil' });
   }
 };

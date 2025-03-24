@@ -62,17 +62,33 @@ if (typeof ChallengeUI === 'undefined') {
             const dropdownMenu = document.querySelector('.dropdown-menu');
             
             if (profileContainer && dropdownMenu) {
+                let timeoutId; // Variable pour stocker l'ID du timeout
+                
                 profileContainer.addEventListener('mouseenter', function() {
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                        timeoutId = null;
+                    }
                     dropdownMenu.classList.add('active');
+                });
+                
+                dropdownMenu.addEventListener('mouseenter', function() {
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                        timeoutId = null;
+                    }
                 });
                 
                 const profileDropdown = document.querySelector('.profile-dropdown');
                 if (profileDropdown) {
                     profileDropdown.addEventListener('mouseleave', function() {
-                        dropdownMenu.classList.remove('active');
+                        timeoutId = setTimeout(() => {
+                            dropdownMenu.classList.remove('active');
+                        }, 800); // Délai de 800ms
                     });
                 }
                 
+                // Reste du code existant pour les clics
                 const profileItem = dropdownMenu.querySelector('.profile-item');
                 const settingsItem = dropdownMenu.querySelector('.settings-item');
                 const logoutItem = dropdownMenu.querySelector('.logout');
@@ -1356,6 +1372,11 @@ if (typeof ChallengeUI === 'undefined') {
 // Initialisation au chargement du document
 document.addEventListener('DOMContentLoaded', () => {
     ChallengeUI.init();
+    
+    // Signaler que ChallengeUI est chargé
+    const event = new CustomEvent('ChallengeUILoaded');
+    window.dispatchEvent(event);
+    
     if (window.chartManager) {
         // Intégration possible avec chart-manager.js
     }

@@ -12,30 +12,44 @@ const ChallengeUI = (function() {
     function init() {
         // Ajouter les styles CSS nécessaires
         initStyles();
+        addModalStyles(); // Assurez-vous que les styles de modal sont ajoutés
+        addChallengeStyles();
+
+        console.log("ChallengeUI initialized");
+        
+        // Configuration des écouteurs d'événements - doit être appelé en premier
+        setupEventListeners();
 
         // Essayer de charger les défis si l'utilisateur est connecté
         if (window.AuthUI && AuthUI.getToken()) {
             loadChallenges();
         }
 
-        // Configuration des écouteurs d'événements
-        setupEventListeners();
+        // Ajouter cet écouteur d'événement pour l'authentification
+        document.addEventListener('userAuthenticated', function(e) {
+            console.log('Événement d\'authentification détecté, chargement des défis...');
+            loadChallenges();
+        });
     }
 
     // Configuration des écouteurs d'événements
     function setupEventListeners() {
+        // Utiliser une délégation d'événements pour le bouton de création
+        document.addEventListener('click', function(event) {
+            // Vérifier si l'élément cliqué ou un de ses parents a l'ID create-challenge-btn
+            const targetElement = event.target.closest('#create-challenge-btn');
+            if (targetElement) {
+                console.log("Bouton Créer un défi cliqué");
+                createChallenge();
+            }
+        });
+
         // Bouton pour actualiser la liste des défis
         const reloadBtn = document.getElementById('reload-challenges-btn');
         if (reloadBtn) {
             reloadBtn.addEventListener('click', loadChallenges);
         }
 
-        // Bouton pour créer un nouveau défi
-        const createBtn = document.getElementById('create-challenge-btn');
-        if (createBtn) {
-            createBtn.addEventListener('click', createChallenge);
-        }
-        
         // Ajouter l'écouteur d'événement pour le bouton de déconnexion
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
@@ -65,16 +79,35 @@ const ChallengeUI = (function() {
         const dropdownMenu = document.querySelector('.dropdown-menu');
         
         if (profileContainer && dropdownMenu) {
+            let timeoutId; // Variable pour stocker l'ID du timeout
+            
             // Ouvrir le menu au survol
             profileContainer.addEventListener('mouseenter', function() {
+                // Annuler tout timeout de fermeture en cours
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
                 dropdownMenu.classList.add('active');
             });
             
-            // Fermer le menu quand on quitte la zone
+            // Gardez également le menu ouvert lorsque la souris est sur le menu
+            dropdownMenu.addEventListener('mouseenter', function() {
+                // Annuler tout timeout de fermeture en cours
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+            });
+            
+            // Fermer le menu quand on quitte la zone, mais avec un délai
             const profileDropdown = document.querySelector('.profile-dropdown');
             if (profileDropdown) {
                 profileDropdown.addEventListener('mouseleave', function() {
-                    dropdownMenu.classList.remove('active');
+                    // Définir un délai avant de fermer le menu (800ms)
+                    timeoutId = setTimeout(() => {
+                        dropdownMenu.classList.remove('active');
+                    }, 800); // Délai de 800ms
                 });
             }
             
@@ -112,42 +145,51 @@ const ChallengeUI = (function() {
     // Charger les défis de l'utilisateur
     async function loadChallenges() {
         const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
-        
         if (!token) {
             console.log("Aucun token trouvé, impossible de charger les défis");
             return;
         }
         
         try {
-            // Afficher l'indicateur de chargement
+            console.log("Chargement des défis en cours...");
             showLoadingIndicator();
             
-            const res = await fetch('/challenges', {
-                headers: { 'Authorization': 'Bearer ' + token }
+            // Utiliser le préfixe /api pour les requêtes au backend
+            const response = await fetch('/api/challenges', {
+                headers: { 
+                    'Authorization': 'Bearer ' + token 
+                }
             });
             
-            if (!res.ok) {
-                throw new Error("Erreur lors de la récupération des défis");
+            console.log("Statut de la réponse:", response.status);
+            
+            if (!response.ok) {
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (e) {
+                    throw new Error(`Erreur ${response.status}: ${response.statusText}`);
+                }
+                throw new Error(errorData.message || "Erreur lors de la récupération des défis");
             }
             
-            challenges = await res.json();
+            challenges = await response.json();
+            console.log("Défis chargés:", challenges);
             
-            // Mise à jour de l'interface utilisateur
             renderChallenges();
             updateStatistics();
             updateProgressChart();
             
-            // Notification
             if (window.AuthUI && AuthUI.showNotification) {
                 AuthUI.showNotification('success', `${challenges.length} défis chargés`);
             }
         } catch (err) {
-            console.error("Erreur:", err);
+            console.error("Erreur lors du chargement des défis:", err);
+            
             if (window.AuthUI && AuthUI.showNotification) {
                 AuthUI.showNotification('error', err.message);
             }
         } finally {
-            // Cacher l'indicateur de chargement
             hideLoadingIndicator();
         }
     }
@@ -210,123 +252,116 @@ const ChallengeUI = (function() {
         });
     }
 
-    // Crée la section des défis si elle n'existe pas
-    function createChallengeSection() {
-        const challengeSection = document.getElementById('challenge-section');
-        if (!challengeSection) return;
-        
-        const content = `
-            <div class="navbar">
-                <div class="navbar-logo">
-                    <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="Lion Mindset">
-                    <h3>Lion Mindset</h3>
-                </div>
-                
-                <div class="navbar-links">
-                    <a href="#dashboard" class="navbar-link active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
-                    <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
-                    <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
-                </div>
-                
-                <div class="navbar-profile">
-                    <div class="profile-dropdown">
-                        <div class="profile-container">
-                            <div class="profile-image">
-                                <img src="${localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png'}" alt="Photo de profil">
-                            </div>
-                            <div class="profile-info">
-                                <span class="profile-name" id="user-display"></span>
-                                <div class="profile-rank">
-                                    <img src="https://cdn-icons-png.flaticon.com/512/9241/9241203.png" class="rank-insignia" alt="Grade">
-                                    <span>Capitaine</span>
-                                </div>
+    // Remplacez la fonction createChallengeSection par cette nouvelle version
+
+function createChallengeSection() {
+    const challengeSection = document.getElementById('challenge-section');
+    if (!challengeSection) return;
+    
+    const content = `
+        <div class="navbar">
+            <div class="navbar-logo">
+                <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="Lion Mindset">
+                <h3>Lion Mindset</h3>
+            </div>
+            
+            <div class="navbar-links">
+                <a href="#dashboard" class="navbar-link active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
+                <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
+                <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
+            </div>
+            
+            <div class="navbar-profile">
+                <div class="profile-dropdown">
+                    <div class="profile-container">
+                        <div class="profile-image">
+                            <img src="${localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png'}" alt="Photo de profil">
+                        </div>
+                        <div class="profile-info">
+                            <span class="profile-name" id="user-display"></span>
+                            <div class="profile-rank">
+                                <img src="https://cdn-icons-png.flaticon.com/512/9241/9241203.png" class="rank-insignia" alt="Grade">
+                                <span>Capitaine</span>
                             </div>
                         </div>
-                        
-                        <div class="dropdown-menu">
-                            <div class="dropdown-item profile-item">
-                                <i class="fas fa-user-circle"></i>
-                                <span>Mon profil</span>
-                            </div>
-                            <div class="dropdown-item settings-item">
-                                <i class="fas fa-cog"></i>
-                                <span>Paramètres</span>
-                            </div>
-                            <div class="dropdown-item logout">
-                                <i class="fas fa-sign-out-alt"></i>
-                                <span>Déconnexion</span>
-                            </div>
+                    </div>
+                    
+                    <div class="dropdown-menu">
+                        <div class="dropdown-item profile-item">
+                            <i class="fas fa-user-circle"></i>
+                            <span>Mon profil</span>
+                        </div>
+                        <div class="dropdown-item settings-item">
+                            <i class="fas fa-cog"></i>
+                            <span>Paramètres</span>
+                        </div>
+                        <div class="dropdown-item logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Déconnexion</span>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-title">Total Défis</div>
-                    <div class="stat-value" id="stat-total">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Défis Actifs</div>
-                    <div class="stat-value" id="stat-active">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Défis Complétés</div>
-                    <div class="stat-value" id="stat-completed">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-title">Progression Moyenne</div>
-                    <div class="stat-value" id="stat-progress">0%</div>
-                </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-title">Total Défis</div>
+                <div class="stat-value" id="stat-total">0</div>
             </div>
-            <div class="chart-container">
-                <h3><i class="fas fa-chart-line"></i> Suivi de Progression</h3>
-                <canvas id="progress-chart" height="250"></canvas>
+            <div class="stat-card">
+                <div class="stat-title">Défis Actifs</div>
+                <div class="stat-value" id="stat-active">0</div>
             </div>
-            <div class="challenge-actions">
-                <h3><i class="fas fa-tasks"></i> Mes Défis</h3>
+            <div class="stat-card">
+                <div class="stat-title">Défis Complétés</div>
+                <div class="stat-value" id="stat-completed">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Progression Moyenne</div>
+                <div class="stat-value" id="stat-progress">0%</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h3><i class="fas fa-chart-line"></i> Suivi de Progression</h3>
+            <canvas id="progress-chart" height="250"></canvas>
+        </div>
+        
+        <div class="challenge-actions">
+            <h3><i class="fas fa-tasks"></i> Mes Défis</h3>
+            <div>
                 <button id="reload-challenges-btn" class="icon-btn" title="Actualiser">
                     <i class="fas fa-sync-alt"></i>
                 </button>
-            </div>
-            <div id="challenge-list" class="challenge-grid"></div>
-            <div class="create-challenge-form">
-                <h3><i class="fas fa-plus-circle"></i> Nouveau Défi</h3>
-                <div class="form-group">
-                    <label for="challenge-title">Titre:</label>
-                    <input type="text" id="challenge-title" placeholder="Nommez votre défi">
-                </div>
-                <div class="form-group">
-                    <label for="challenge-description">Description:</label>
-                    <textarea id="challenge-description" placeholder="Décrivez votre défi"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="challenge-progress">Progression initiale (%):</label>
-                    <input type="number" id="challenge-progress" min="0" max="100" value="0">
-                </div>
                 <button id="create-challenge-btn" class="primary-btn">
-                    <i class="fas fa-plus"></i> Créer le Défi
+                    <i class="fas fa-plus"></i> Créer un Défi
                 </button>
             </div>
-        `;
+        </div>
         
-        challengeSection.innerHTML = content;
-        setupEventListeners(); // Réattacher tous les écouteurs d'événements
+        <div id="challenge-list" class="challenge-grid"></div>
+    `;
+    
+    challengeSection.innerHTML = content;
+    
+    // Réattacher tous les écouteurs d'événements
+    setupEventListeners();
 
-        // Réafficher le nom d'utilisateur
-        if (window.AuthUI && AuthUI.getCurrentUser()) {
-            const userDisplay = document.getElementById('user-display');
-            if (userDisplay) {
-                const currentUser = AuthUI.getCurrentUser();
-                userDisplay.textContent = currentUser.username || currentUser.email;
-            }
-        }
-
-        // Réattacher les écouteurs d'événements de AuthUI
-        if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
-            AuthUI.setupEventListeners();
+    // Réafficher le nom d'utilisateur
+    if (window.AuthUI && AuthUI.getCurrentUser()) {
+        const userDisplay = document.getElementById('user-display');
+        if (userDisplay) {
+            const currentUser = AuthUI.getCurrentUser();
+            userDisplay.textContent = currentUser.username || currentUser.email;
         }
     }
+
+    // Réattacher les écouteurs d'événements de AuthUI
+    if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
+        AuthUI.setupEventListeners();
+    }
+}
 
     // Crée une carte pour un défi
     function createChallengeCard(challenge) {
@@ -492,63 +527,171 @@ const ChallengeUI = (function() {
         }
     }
 
-    // Fonction pour créer un nouveau défi
-    async function createChallenge() {
-        const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
-        if (!token) return;
-        
-        const title = document.getElementById('challenge-title').value;
-        const description = document.getElementById('challenge-description').value;
-        const progress = parseInt(document.getElementById('challenge-progress').value) || 0;
-        
-        if (!title) {
-            if (window.AuthUI && AuthUI.showNotification) {
-                AuthUI.showNotification('error', 'Le titre du défi est obligatoire');
-            }
-            return;
-        }
-        
-        const createBtn = document.getElementById('create-challenge-btn');
-        const originalText = createBtn.innerHTML;
-        createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création...';
-        createBtn.disabled = true;
-        
-        try {
-            const res = await fetch('/challenges', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
-                body: JSON.stringify({ title, description, progress })
-            });
-            
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.message || 'Erreur lors de la création du défi');
-            }
-            
-            const data = await res.json();
-            
-            document.getElementById('challenge-title').value = '';
-            document.getElementById('challenge-description').value = '';
-            document.getElementById('challenge-progress').value = '0';
-            
-            if (window.AuthUI && AuthUI.showNotification) {
-                AuthUI.showNotification('success', 'Défi créé avec succès');
-            }
-            
-            await loadChallenges();
-        } catch (err) {
-            console.error('Erreur:', err);
-            if (window.AuthUI && AuthUI.showNotification) {
-                AuthUI.showNotification('error', err.message);
-            }
-        } finally {
-            createBtn.innerHTML = originalText;
-            createBtn.disabled = false;
-        }
+    // Remplacez la fonction createChallenge() complète
+
+async function createChallenge() {
+    // Supprimer toute modale existante pour éviter les doublons
+    const existingModals = document.querySelectorAll('.modal');
+    existingModals.forEach(modal => {
+        document.body.removeChild(modal);
+    });
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus-circle"></i> Nouveau Défi</h3>
+                <button type="button" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="new-challenge-form">
+                    <div class="form-group">
+                        <label for="challenge-title">Titre:</label>
+                        <input type="text" id="challenge-title" placeholder="Ex: Méditer 10 minutes par jour" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="challenge-description">Description:</label>
+                        <textarea id="challenge-description" placeholder="Décrivez votre défi en détail..." rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="challenge-category">Catégorie:</label>
+                        <select id="challenge-category">
+                            <option value="physique">Physique</option>
+                            <option value="mental">Mental</option>
+                            <option value="nutrition">Nutrition</option>
+                            <option value="quotidien">Quotidien</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="challenge-deadline">Date limite (optionnel):</label>
+                        <input type="date" id="challenge-deadline">
+                    </div>
+                    <div class="form-group">
+                        <label for="challenge-initial-progress">Progression initiale: <span id="progress-value-display">0%</span></label>
+                        <div class="progress-slider-container">
+                            <input type="range" id="challenge-initial-progress" class="slider" min="0" max="100" value="0">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancel-create" class="secondary-btn">Annuler</button>
+                <button type="button" id="save-challenge" class="primary-btn">Créer</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Mise à jour en temps réel de l'affichage de la progression
+    const progressSlider = document.getElementById('challenge-initial-progress');
+    const progressDisplay = document.getElementById('progress-value-display');
+    
+    if (progressSlider && progressDisplay) {
+        progressSlider.addEventListener('input', function() {
+            progressDisplay.textContent = this.value + '%';
+        });
     }
+    
+    // Fermeture de la modale
+    const closeModal = () => {
+        if (document.querySelector('.modal')) {
+            document.body.removeChild(document.querySelector('.modal'));
+        }
+    };
+    
+    // Gestionnaires d'événements
+    const closeBtn = modal.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeModal);
+    }
+    
+    const cancelBtn = modal.querySelector('#cancel-create');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeModal);
+    }
+    
+    const saveBtn = modal.querySelector('#save-challenge');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const title = document.getElementById('challenge-title').value;
+            const description = document.getElementById('challenge-description').value;
+            const category = document.getElementById('challenge-category').value;
+            const deadline = document.getElementById('challenge-deadline').value;
+            const initialProgress = parseInt(document.getElementById('challenge-initial-progress').value);
+            
+            if (!title) {
+                if (window.AuthUI && AuthUI.showNotification) {
+                    AuthUI.showNotification('error', 'Le titre du défi est obligatoire');
+                } else {
+                    alert('Le titre du défi est obligatoire');
+                }
+                return;
+            }
+            
+            try {
+                // Afficher un indicateur de chargement sur le bouton
+                const originalText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Création...';
+                saveBtn.disabled = true;
+                
+                const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+                
+                // Faire la requête au serveur - utiliser la bonne URL avec préfixe /api
+                const response = await fetch('/api/challenges', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        category,
+                        deadline: deadline || null,
+                        progress: initialProgress
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Erreur lors de la création du défi');
+                }
+                
+                // Ajouter le nouveau défi à la liste locale
+                challenges.push(data.challenge);
+                
+                // Notifier l'utilisateur du succès
+                if (window.AuthUI && AuthUI.showNotification) {
+                    AuthUI.showNotification('success', 'Défi créé avec succès!');
+                } else {
+                    alert('Défi créé avec succès!');
+                }
+                
+                // Fermer la modale
+                closeModal();
+                
+                // Recharger les défis pour mettre à jour l'interface
+                await loadChallenges();
+            } catch (error) {
+                console.error('Erreur lors de la création du défi:', error);
+                
+                if (window.AuthUI && AuthUI.showNotification) {
+                    AuthUI.showNotification('error', error.message || 'Erreur lors de la création du défi');
+                } else {
+                    alert('Erreur: ' + (error.message || 'Erreur lors de la création du défi'));
+                }
+                
+                // Restaurer le bouton
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        });
+    }
+}
 
     // Fonction pour mettre à jour un défi existant
     async function editChallenge(challenge) {
@@ -573,8 +716,10 @@ const ChallengeUI = (function() {
                         <textarea id="edit-description">${challenge.description || ''}</textarea>
                     </div>
                     <div class="form-group">
-                        <label for="edit-progress">Progression (%):</label>
-                        <input type="number" id="edit-progress" min="0" max="100" value="${challenge.progress || 0}">
+                        <label for="edit-progress">Progression: <span id="edit-progress-value-display">${challenge.progress || 0}%</span></label>
+                        <div class="progress-slider-container">
+                            <input type="range" id="edit-progress" class="slider" min="0" max="100" value="${challenge.progress || 0}">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -586,10 +731,15 @@ const ChallengeUI = (function() {
         
         document.body.appendChild(modal);
         
-        const closeModal = () => {
-            document.body.removeChild(modal);
-        };
+        // Mise à jour en temps réel de l'affichage de la progression
+        const progressSlider = document.getElementById('edit-progress');
+        const progressDisplay = document.getElementById('edit-progress-value-display');
         
+        progressSlider.addEventListener('input', function() {
+            progressDisplay.textContent = this.value + '%';
+        });
+        
+        const closeModal = () => document.body.removeChild(modal);
         modal.querySelector('.close-btn').addEventListener('click', closeModal);
         modal.querySelector('#cancel-edit').addEventListener('click', closeModal);
         
@@ -611,11 +761,11 @@ const ChallengeUI = (function() {
             saveBtn.disabled = true;
             
             try {
-                const res = await fetch(`/challenges/${challenge._id}`, {
+                const res = await fetch(`/api/challenges/${challenge._id}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ title, description, progress })
                 });
@@ -651,7 +801,7 @@ const ChallengeUI = (function() {
         if (!confirmed) return;
         
         try {
-            const res = await fetch(`/challenges/${challengeId}`, {
+            const res = await fetch(`/api/challenges/${challengeId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': 'Bearer ' + token
@@ -676,99 +826,111 @@ const ChallengeUI = (function() {
         }
     }
 
-    // Fonction pour mettre à jour la progression d'un défi
-    async function updateChallengeProgress(challengeId, currentProgress) {
-        const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
-        if (!token) return;
-        
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3><i class="fas fa-chart-line"></i> Mettre à jour la progression</h3>
-                    <button class="close-btn">&times;</button>
+    // Modifiez la fonction updateChallengeProgress pour garantir la mise à jour en base de données
+
+async function updateChallengeProgress(challengeId, currentProgress) {
+    const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+    if (!token) return;
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-chart-line"></i> Mettre à jour la progression</h3>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="progress-slider-container">
+                    <input type="range" id="progress-slider" min="0" max="100" value="${currentProgress}" class="slider">
+                    <div class="progress-value">${currentProgress}%</div>
                 </div>
-                <div class="modal-body">
-                    <div class="progress-slider-container">
-                        <input type="range" id="progress-slider" min="0" max="100" value="${currentProgress}" class="slider">
-                        <div class="progress-value">${currentProgress}%</div>
-                    </div>
-                    <div class="form-group">
-                        <label for="progress-note">Note (optionnel):</label>
-                        <textarea id="progress-note" placeholder="Décrivez votre progression..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button id="cancel-progress" class="secondary-btn">Annuler</button>
-                    <button id="save-progress" class="primary-btn">Enregistrer</button>
+                <div class="form-group">
+                    <label for="progress-note">Note (optionnel):</label>
+                    <textarea id="progress-note" placeholder="Décrivez votre progression..."></textarea>
                 </div>
             </div>
-        `;
+            <div class="modal-footer">
+                <button id="cancel-progress" class="secondary-btn">Annuler</button>
+                <button id="save-progress" class="primary-btn">Enregistrer</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const slider = document.getElementById('progress-slider');
+    const valueDisplay = modal.querySelector('.progress-value');
+    slider.addEventListener('input', () => valueDisplay.textContent = `${slider.value}%`);
+    
+    const closeModal = () => {
+        const modalElement = document.querySelector('.modal');
+        if (modalElement) {
+            document.body.removeChild(modalElement);
+        }
+    };
+    
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('#cancel-progress').addEventListener('click', closeModal);
+    
+    modal.querySelector('#save-progress').addEventListener('click', async () => {
+        const progress = parseInt(slider.value);
+        const note = document.getElementById('progress-note').value;
         
-        document.body.appendChild(modal);
+        const saveBtn = document.getElementById('save-progress');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+        saveBtn.disabled = true;
         
-        const slider = document.getElementById('progress-slider');
-        const valueDisplay = modal.querySelector('.progress-value');
-        slider.addEventListener('input', () => {
-            valueDisplay.textContent = `${slider.value}%`;
-        });
-        
-        const closeModal = () => {
-            document.body.removeChild(modal);
-        };
-        
-        modal.querySelector('.close-btn').addEventListener('click', closeModal);
-        modal.querySelector('#cancel-progress').addEventListener('click', closeModal);
-        
-        modal.querySelector('#save-progress').addEventListener('click', async () => {
-            const progress = parseInt(slider.value);
-            const note = document.getElementById('progress-note').value;
+        try {
+            console.log('Mise à jour du défi:', challengeId, 'avec progression:', progress);
             
-            const saveBtn = document.getElementById('save-progress');
-            const originalText = saveBtn.innerHTML;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-            saveBtn.disabled = true;
+            const response = await fetch(`/api/challenges/${challengeId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ progress, note })
+            });
             
-            try {
-                const res = await fetch(`/challenges/${challengeId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
-                    },
-                    body: JSON.stringify({ progress, note })
-                });
-                
-                if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.message || 'Erreur lors de la mise à jour de la progression');
-                }
-                
-                if (window.AuthUI && AuthUI.showNotification) {
-                    AuthUI.showNotification('success', 'Progression mise à jour avec succès');
-                }
+            console.log('Statut de la réponse:', response.status);
+            
+            const data = await response.json();
+            console.log('Réponse du serveur:', data);
+            
+            if (!response.ok) {
+                throw new Error(data.message || 'Erreur lors de la mise à jour de la progression');
+            }
+            
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('success', 'Progression mise à jour avec succès');
                 
                 if (progress === 100) {
-                    if (window.AuthUI && AuthUI.showNotification) {
-                        setTimeout(() => {
-                            AuthUI.showNotification('success', '🏆 FÉLICITATIONS! Défi complété avec succès! 🏆');
-                        }, 1000);
-                    }
+                    setTimeout(() => {
+                        AuthUI.showNotification('success', '🏆 FÉLICITATIONS! Défi complété avec succès! 🏆');
+                    }, 1000);
                 }
-                
-                closeModal();
-                await loadChallenges();
-            } catch (err) {
-                console.error('Erreur:', err);
-                if (window.AuthUI && AuthUI.showNotification) {
-                    AuthUI.showNotification('error', err.message);
-                }
-                saveBtn.innerHTML = originalText;
-                saveBtn.disabled = false;
+            } else {
+                alert('Progression mise à jour avec succès');
             }
-        });
-    }
+            
+            closeModal();
+            await loadChallenges();
+        } catch (err) {
+            console.error('Erreur:', err);
+            
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('error', err.message);
+            } else {
+                alert('Erreur: ' + err.message);
+            }
+            
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        }
+    });
+}
 
     // Ajouter les styles dynamiques pour les modals
     function addModalStyles() {
@@ -776,130 +938,63 @@ const ChallengeUI = (function() {
             const styleEl = document.createElement('style');
             styleEl.id = 'modal-styles';
             styleEl.innerHTML = `
-                .modal {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background-color: rgba(0, 0, 0, 0.7);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 1000;
-                    animation: fadeIn 0.3s ease;
+                .modal { 
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    width: 100%; 
+                    height: 100%; 
+                    background-color: rgba(0, 0, 0, 0.8); 
+                    display: flex; 
+                    justify-content: center; 
+                    align-items: center; 
+                    z-index: 1000; 
+                    animation: fadeIn 0.3s ease; 
+                }
+                .modal-content { 
+                    background-color: #222; 
+                    border-radius: 10px; 
+                    width: 90%; 
+                    max-width: 500px; 
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); 
+                    animation: slideIn 0.3s ease; 
+                    color: white;
+                }
+                .modal-header { 
+                    padding: 15px 20px; 
+                    border-bottom: 1px solid #333; 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                }
+                .modal-header h3 { 
+                    margin: 0; 
+                    color: #d4af37; 
+                }
+                .modal-body { 
+                    padding: 20px; 
+                }
+                .modal-footer { 
+                    padding: 15px 20px; 
+                    border-top: 1px solid #333; 
+                    display: flex; 
+                    justify-content: flex-end; 
+                    gap: 10px; 
+                }
+                .close-btn { 
+                    background: none; 
+                    border: none; 
+                    font-size: 24px; 
+                    color: white; 
+                    cursor: pointer; 
+                    padding: 0; 
+                    margin: 0; 
+                }
+                .close-btn:hover { 
+                    color: #aa0000; 
                 }
                 
-                .modal-content {
-                    background-color: var(--card-bg);
-                    border-radius: 10px;
-                    width: 90%;
-                    max-width: 500px;
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-                    animation: slideIn 0.3s ease;
-                }
-                
-                .modal-header {
-                    padding: 15px 20px;
-                    border-bottom: 1px solid #333;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                
-                .modal-header h3 {
-                    margin: 0;
-                    color: var(--accent-gold);
-                }
-                
-                .modal-body {
-                    padding: 20px;
-                }
-                
-                .modal-footer {
-                    padding: 15px 20px;
-                    border-top: 1px solid #333;
-                    display: flex;
-                    justify-content: flex-end;
-                    gap: 10px;
-                }
-                
-                .close-btn {
-                    background: none;
-                    border: none;
-                    font-size: 24px;
-                    color: var(--text-color);
-                    cursor: pointer;
-                    padding: 0;
-                    margin: 0;
-                }
-                
-                .close-btn:hover {
-                    color: var(--light-red);
-                }
-                
-                .slider {
-                    width: 100%;
-                    height: 15px;
-                    background: #333;
-                    border-radius: 10px;
-                    -webkit-appearance: none;
-                    outline: none;
-                }
-                
-                .slider::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    width: 25px;
-                    height: 25px;
-                    border-radius: 50%;
-                    background: var(--light-red);
-                    cursor: pointer;
-                }
-                
-                .slider::-moz-range-thumb {
-                    width: 25px;
-                    height: 25px;
-                    border-radius: 50%;
-                    background: var(--light-red);
-                    cursor: pointer;
-                }
-                
-                .progress-slider-container {
-                    margin-bottom: 20px;
-                }
-                
-                .progress-value {
-                    text-align: center;
-                    font-size: 24px;
-                    color: var(--accent-gold);
-                    margin-top: 10px;
-                }
-                
-                .secondary-btn {
-                    background-color: #333;
-                }
-                
-                .secondary-btn:hover {
-                    background-color: #444;
-                }
-                
-                .primary-btn {
-                    background-color: var(--medium-red);
-                }
-                
-                .primary-btn:hover {
-                    background-color: var(--light-red);
-                }
-                
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                
-                @keyframes slideIn {
-                    from { transform: translateY(-50px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
+                /* Reste des styles... */
             `;
             document.head.appendChild(styleEl);
         }
@@ -1273,108 +1368,160 @@ const ChallengeUI = (function() {
         });
     }
 
-    // Fonction pour afficher la modal des paramètres
-    function showSettingsModal() {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3><i class="fas fa-cog"></i> Paramètres</h3>
-                    <button class="close-btn">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="settings-section">
-                        <h4>Apparence</h4>
-                        <div class="form-group">
-                            <label>Thème:</label>
-                            <select id="theme-selector">
-                                <option value="dark-red" selected>Lion Rouge (par défaut)</option>
-                                <option value="dark-blue">Lion Bleu</option>
-                                <option value="dark-gold">Lion Or</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>Informations personnelles</h4>
-                        <div class="form-group">
-                            <label for="settings-username">Nom d'utilisateur:</label>
-                            <input type="text" id="settings-username" value="${AuthUI.getCurrentUser().username || ''}">
-                        </div>
-                        <div class="form-group">
-                            <label for="settings-email">Email:</label>
-                            <input type="email" id="settings-email" value="${AuthUI.getCurrentUser().email || ''}" disabled>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>Sécurité</h4>
-                        <div class="form-group">
-                            <button id="change-password-btn" class="secondary-btn">
-                                <i class="fas fa-key"></i> Changer mot de passe
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section danger-zone">
-                        <h4>Zone de danger</h4>
-                        <div class="form-group">
-                            <button id="logout-btn-settings" class="danger-btn">
-                                <i class="fas fa-sign-out-alt"></i> Se déconnecter
-                            </button>
-                        </div>
+    // Remplacez la fonction showSettingsModal() complète
+
+function showSettingsModal() {
+    const currentUser = window.AuthUI ? AuthUI.getCurrentUser() : JSON.parse(localStorage.getItem('user')) || {};
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Paramètres</h3>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4>Apparence</h4>
+                    <div class="form-group">
+                        <label>Thème:</label>
+                        <select id="theme-selector">
+                            <option value="dark-red" selected>Lion Rouge (par défaut)</option>
+                            <option value="dark-blue">Lion Bleu</option>
+                            <option value="dark-gold">Lion Or</option>
+                        </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button id="cancel-settings" class="secondary-btn">Annuler</button>
-                    <button id="save-settings" class="primary-btn">Enregistrer</button>
+                <div class="settings-section">
+                    <h4>Informations personnelles</h4>
+                    <div class="form-group">
+                        <label for="settings-username">Nom d'utilisateur:</label>
+                        <input type="text" id="settings-username" value="${currentUser.username || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label for="settings-email">Email:</label>
+                        <input type="email" id="settings-email" value="${currentUser.email || ''}" disabled>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>Sécurité</h4>
+                    <div class="form-group">
+                        <button id="change-password-btn" class="secondary-btn">
+                            <i class="fas fa-key"></i> Changer mot de passe
+                        </button>
+                    </div>
+                </div>
+                <div class="settings-section danger-zone">
+                    <h4>Zone de danger</h4>
+                    <div class="form-group">
+                        <button id="logout-btn-settings" class="danger-btn">
+                            <i class="fas fa-sign-out-alt"></i> Se déconnecter
+                        </button>
+                    </div>
                 </div>
             </div>
-        `;
+            <div class="modal-footer">
+                <button id="cancel-settings" class="secondary-btn">Annuler</button>
+                <button id="save-settings" class="primary-btn">Enregistrer</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const closeModal = () => {
+        if (document.querySelector('.modal')) {
+            document.body.removeChild(document.querySelector('.modal'));
+        }
+    };
+    
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('#cancel-settings').addEventListener('click', closeModal);
+    
+    modal.querySelector('#logout-btn-settings').addEventListener('click', () => {
+        if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
+            AuthUI.handleLogout();
+        } else {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.reload();
+        }
+        closeModal();
+    });
+    
+    modal.querySelector('#save-settings').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('save-settings');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Enregistrement...';
+        saveBtn.disabled = true;
         
-        document.body.appendChild(modal);
-        
-        // Gestion des événements de la modale
-        const closeModal = () => {
-            document.body.removeChild(modal);
-        };
-        
-        modal.querySelector('.close-btn').addEventListener('click', closeModal);
-        modal.querySelector('#cancel-settings').addEventListener('click', closeModal);
-        
-        // Bouton de déconnexion
-        modal.querySelector('#logout-btn-settings').addEventListener('click', () => {
-            if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
-                AuthUI.handleLogout();
-            } else {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                window.location.reload();
-            }
-            closeModal();
-        });
-        
-        // Sauvegarde des paramètres
-        modal.querySelector('#save-settings').addEventListener('click', () => {
+        try {
             const username = document.getElementById('settings-username').value;
+            
+            // Mettre à jour dans la base de données
+            const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+            if (!token) throw new Error('Vous devez être connecté pour modifier vos paramètres');
+            
+            console.log("Mise à jour du nom d'utilisateur:", username);
+            
+            // Utiliser le préfixe /api pour la route utilisateur
+            const response = await fetch('/api/users/profile', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ username })
+            });
+            
+            console.log("Statut de la réponse:", response.status);
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Erreur lors de la mise à jour du profil');
+            }
+            
+            const data = await response.json();
+            console.log("Réponse du serveur:", data);
             
             // Mettre à jour l'affichage
             const userDisplay = document.getElementById('user-display');
-            if (userDisplay) userDisplay.textContent = username;
+            if (userDisplay) {
+                userDisplay.textContent = username;
+            }
             
             // Mettre à jour dans localStorage
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             user.username = username;
             localStorage.setItem('user', JSON.stringify(user));
             
+            // Mettre à jour currentUser dans le module AuthUI
+            if (window.AuthUI && typeof AuthUI.updateCurrentUser === 'function') {
+                AuthUI.updateCurrentUser({ ...currentUser, username });
+            }
+            
             if (window.AuthUI && AuthUI.showNotification) {
-                AuthUI.showNotification('success', 'Paramètres enregistrés');
+                AuthUI.showNotification('success', 'Paramètres enregistrés avec succès');
+            } else {
+                alert('Paramètres enregistrés avec succès');
             }
             
             closeModal();
-        });
-    }
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde des paramètres:', error);
+            
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('error', error.message || 'Erreur lors de la sauvegarde des paramètres');
+            } else {
+                alert('Erreur: ' + (error.message || 'Erreur lors de la sauvegarde des paramètres'));
+            }
+            
+            // Restaurer le bouton
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        }
+    });
+}
 
     // Fonction pour afficher la modal de changement de mot de passe
     function showChangePasswordModal() {
