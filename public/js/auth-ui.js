@@ -146,7 +146,7 @@ const AuthUI = (function() {
             }
             
             // Appel API pour l'inscription
-            const res = await fetch('/register', {
+            const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, username, password })
@@ -212,7 +212,7 @@ const AuthUI = (function() {
         try {
             showLoadingIndicator('login-btn', 'Connexion...');
             
-            const response = await fetch('/login', {
+            const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

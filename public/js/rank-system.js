@@ -8,6 +8,30 @@ if (typeof ChallengeUI === 'undefined') {
         // Variables privées
         let challenges = [];
         let chartInstance = null;
+        const DEFAULT_AVATAR = 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
+
+        // Helpers utilisateur / avatar
+        function getStoredUser() {
+            try {
+                if (window.AuthUI && typeof AuthUI.getCurrentUser === 'function') {
+                    const user = AuthUI.getCurrentUser();
+                    if (user) return user;
+                }
+                return JSON.parse(localStorage.getItem('user') || '{}');
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function getUserPhotoKey(user) {
+            const id = user?.id || user?._id || user?.email || 'guest';
+            return `profilePhoto:${id}`;
+        }
+
+        function getProfilePhoto(user) {
+            const key = getUserPhotoKey(user);
+            return localStorage.getItem(key) || DEFAULT_AVATAR;
+        }
 
         // Fonction d'initialisation
         function init() {
@@ -219,11 +243,14 @@ if (typeof ChallengeUI === 'undefined') {
             const challengeSection = document.getElementById('challenge-section');
             if (!challengeSection) return;
             
+            const currentUser = getStoredUser();
+            const profilePhoto = getProfilePhoto(currentUser);
+
             const content = `
                 <div class="navbar">
                     <div class="navbar-logo">
-                        <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="Lion Mindset">
-                        <h3>Lion Mindset</h3>
+                        <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="LionTrack">
+                        <h3>LionTrack</h3>
                     </div>
                     <div class="navbar-links">
                         <a href="#dashboard" class="navbar-link active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
@@ -234,7 +261,7 @@ if (typeof ChallengeUI === 'undefined') {
                         <div class="profile-dropdown">
                             <div class="profile-container">
                                 <div class="profile-image">
-                                    <img src="${localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png'}" alt="Photo de profil">
+                                    <img src="${profilePhoto}" alt="Photo de profil">
                                 </div>
                                 <div class="profile-info">
                                     <span class="profile-name" id="user-display"></span>
@@ -1076,10 +1103,10 @@ if (typeof ChallengeUI === 'undefined') {
 
         // Affiche la modal de profil
         function showProfileModal() {
-            const currentUser = window.AuthUI ? AuthUI.getCurrentUser() : JSON.parse(localStorage.getItem('user')) || {};
+            const currentUser = getStoredUser();
             const username = currentUser.username || 'Utilisateur';
             const email = currentUser.email || '';
-            const profilePhoto = localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
+            const profilePhoto = getProfilePhoto(currentUser);
             let currentRank = { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' };
             if (window.RankSystem && typeof RankSystem.getCurrentRank === 'function') {
                 currentRank = RankSystem.getCurrentRank();
@@ -1164,10 +1191,26 @@ if (typeof ChallengeUI === 'undefined') {
                 }
             });
             
-            const closeModal = () => {
-                document.body.removeChild(modal);
+            const onKeyDown = (evt) => {
+                if (evt.key === 'Escape') {
+                    closeModal();
+                }
             };
-            
+
+            const closeModal = () => {
+                document.removeEventListener('keydown', onKeyDown);
+                if (modal.parentNode) {
+                    modal.parentNode.removeChild(modal);
+                }
+            };
+
+            document.addEventListener('keydown', onKeyDown);
+            modal.addEventListener('click', (evt) => {
+                if (evt.target === modal) {
+                    closeModal();
+                }
+            });
+
             modal.querySelector('.close-btn').addEventListener('click', closeModal);
             modal.querySelector('#cancel-profile').addEventListener('click', closeModal);
             
@@ -1175,9 +1218,10 @@ if (typeof ChallengeUI === 'undefined') {
                 const username = document.getElementById('profile-username').value;
                 const bio = document.getElementById('profile-bio').value;
                 const profilePhoto = imagePreview.src;
+                const photoKey = getUserPhotoKey(currentUser);
                 
                 localStorage.setItem('userBio', bio);
-                localStorage.setItem('profilePhoto', profilePhoto);
+                localStorage.setItem(photoKey, profilePhoto);
                 
                 const navbarProfileImage = document.querySelector('.profile-image img');
                 if (navbarProfileImage) {
@@ -1275,7 +1319,7 @@ if (typeof ChallengeUI === 'undefined') {
                 const userDisplay = document.getElementById('user-display');
                 if (userDisplay) userDisplay.textContent = username;
                 
-                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                const user = getStoredUser();
                 user.username = username;
                 localStorage.setItem('user', JSON.stringify(user));
                 

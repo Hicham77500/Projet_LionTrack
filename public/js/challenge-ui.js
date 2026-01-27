@@ -7,6 +7,45 @@ const ChallengeUI = (function() {
     // Variables privées
     let challenges = [];
     let chartInstance = null;
+    const DEFAULT_AVATAR = 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
+
+    // Helpers utilisateur / stockage par utilisateur
+    function getStoredUser() {
+        try {
+            if (window.AuthUI && typeof AuthUI.getCurrentUser === 'function') {
+                const u = AuthUI.getCurrentUser();
+                if (u) return u;
+            }
+            return JSON.parse(localStorage.getItem('user') || '{}');
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function getUserKey(user, suffix) {
+        const id = user?.id || user?._id || user?.email || 'guest';
+        return `${suffix}:${id}`;
+    }
+
+    function getProfilePhoto(user) {
+        const key = getUserKey(user, 'profilePhoto');
+        return localStorage.getItem(key) || DEFAULT_AVATAR;
+    }
+
+    function setProfilePhoto(user, dataUrl) {
+        const key = getUserKey(user, 'profilePhoto');
+        localStorage.setItem(key, dataUrl);
+    }
+
+    function getUserBio(user) {
+        const key = getUserKey(user, 'userBio');
+        return localStorage.getItem(key) || '';
+    }
+
+    function setUserBio(user, bio) {
+        const key = getUserKey(user, 'userBio');
+        localStorage.setItem(key, bio);
+    }
 
     // Fonction d'initialisation
     function init() {
@@ -258,11 +297,14 @@ function createChallengeSection() {
     const challengeSection = document.getElementById('challenge-section');
     if (!challengeSection) return;
     
+    const currentUser = getStoredUser();
+    const profilePhoto = getProfilePhoto(currentUser);
+
     const content = `
         <div class="navbar">
             <div class="navbar-logo">
-                <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="Lion Mindset">
-                <h3>Lion Mindset</h3>
+                <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="LionTrack">
+                <h3>LionTrack</h3>
             </div>
             
             <div class="navbar-links">
@@ -275,7 +317,7 @@ function createChallengeSection() {
                 <div class="profile-dropdown">
                     <div class="profile-container">
                         <div class="profile-image">
-                            <img src="${localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png'}" alt="Photo de profil">
+                            <img src="${profilePhoto}" alt="Photo de profil">
                         </div>
                         <div class="profile-info">
                             <span class="profile-name" id="user-display"></span>
@@ -1243,12 +1285,11 @@ async function updateChallengeProgress(challengeId, currentProgress) {
 
     // Fonction pour afficher la modal de profil
     function showProfileModal() {
-        const currentUser = window.AuthUI ? AuthUI.getCurrentUser() : JSON.parse(localStorage.getItem('user')) || {};
+        const currentUser = getStoredUser();
         const username = currentUser.username || 'Utilisateur';
         const email = currentUser.email || '';
         
-        // Récupérer la photo de profil depuis localStorage ou utiliser l'image par défaut
-        const profilePhoto = localStorage.getItem('profilePhoto') || 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
+        const profilePhoto = getProfilePhoto(currentUser);
         
         // Récupérer le grade actuel via RankSystem
         let currentRank = { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' };
@@ -1289,7 +1330,7 @@ async function updateChallengeProgress(challengeId, currentProgress) {
                     </div>
                     <div class="form-group">
                         <label for="profile-bio">Biographie:</label>
-                        <textarea id="profile-bio" placeholder="Parlez-nous de vous...">${localStorage.getItem('userBio') || ''}</textarea>
+                        <textarea id="profile-bio" placeholder="Parlez-nous de vous...">${getUserBio(currentUser)}</textarea>
                     </div>
                     <div class="achievement-section">
                         <h4><i class="fas fa-medal"></i> Réalisations</h4>
@@ -1350,9 +1391,8 @@ async function updateChallengeProgress(challengeId, currentProgress) {
             const bio = document.getElementById('profile-bio').value;
             const profilePhoto = imagePreview.src;
             
-            // Sauvegarder dans localStorage
-            localStorage.setItem('userBio', bio);
-            localStorage.setItem('profilePhoto', profilePhoto);
+            setUserBio(currentUser, bio);
+            setProfilePhoto(currentUser, profilePhoto);
             
             // Mettre à jour l'affichage de la photo dans la navbar
             const navbarProfileImage = document.querySelector('.profile-image img');
@@ -1371,7 +1411,7 @@ async function updateChallengeProgress(challengeId, currentProgress) {
     // Remplacez la fonction showSettingsModal() complète
 
 function showSettingsModal() {
-    const currentUser = window.AuthUI ? AuthUI.getCurrentUser() : JSON.parse(localStorage.getItem('user')) || {};
+            const currentUser = getStoredUser();
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.innerHTML = `
