@@ -10,6 +10,8 @@
     align-items: center;
     z-index: 1000;
     animation: fadeIn 0.3s ease;
+    overflow-y: auto;
+    padding: 20px;
 }
 
 .modal-content {
@@ -17,8 +19,12 @@
     border-radius: 10px;
     width: 90%;
     max-width: 500px;
+    max-height: 90vh;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     animation: slideIn 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    margin: auto;
 }
 
 .modal-header {
@@ -36,6 +42,9 @@
 
 .modal-body {
     padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .modal-footer {
@@ -44,6 +53,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+    flex-shrink: 0;
 }
 
 .close-btn {
@@ -331,21 +341,24 @@
 /* Responsive ajustes pour les modales (profil/paramètres) */
 @media (max-width: 768px) {
     .modal {
-        align-items: flex-start;
-        padding: 20px 12px;
+        align-ite10px;
     }
 
     .modal-content {
-        width: 100%;
+        width: 95%;
         max-width: 420px;
-        margin-top: 20px;
+        max-height: 95vh;
+        margin: 0 auto;
         border-radius: 8px;
     }
 
     .modal-header,
-    .modal-body,
     .modal-footer {
-        padding: 14px;
+        padding: 12px;
+    }
+
+    .modal-body {
+        padding: 15px;
     }
 
     .achievements-grid {
@@ -354,12 +367,48 @@
 }
 
 @media (max-width: 480px) {
+    .modal {
+        padding: 5px;
+    }
+
     .modal-content {
+        width: 98%;
         max-width: 360px;
-        margin-top: 16px;
+        max-height: 98vh;
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: 10px;
+    }
+
+    .modal-body {
+        padding: 12px;
     }
 
     .profile-header {
+        gap: 12px;
+    }
+
+    .profile-image-large {
+        width: 100px;
+        height: 100px;
+    }
+}
+
+/* Amélioration pour les petits écrans et zoom */
+@media (max-height: 700px) {
+    .modal-content {
+        max-height: 95vh;
+    }
+
+    .modal-body {
+        padding: 15px;
+    }
+
+    .profile-image-large {
+        width: 80px;
+        height: 80ader {
         gap: 12px;
     }
 }

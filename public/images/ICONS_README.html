@@ -1,0 +1,36 @@
+<!-- Instructions pour générer les icônes PWA -->
+<!-- 
+Pour créer facilement les icônes PWA, vous pouvez :
+
+1. Utiliser un outil en ligne comme :
+   - https://realfavicongenerator.net/
+   - https://www.pwabuilder.com/imageGenerator
+   
+2. Ou utiliser ImageMagick en ligne de commande :
+   
+   Créez d'abord une icône de base (icon-base.png de 512x512) avec le logo LionTrack,
+   puis générez toutes les tailles :
+   
+   convert icon-base.png -resize 72x72 icon-72x72.png
+   convert icon-base.png -resize 96x96 icon-96x96.png
+   convert icon-base.png -resize 128x128 icon-128x128.png
+   convert icon-base.png -resize 144x144 icon-144x144.png
+   convert icon-base.png -resize 152x152 icon-152x152.png
+   convert icon-base.png -resize 192x192 icon-192x192.png
+   convert icon-base.png -resize 384x384 icon-384x384.png
+   convert icon-base.png -resize 512x512 icon-512x512.png
+
+3. Placez toutes les icônes générées dans le dossier public/images/
+
+L'icône devrait avoir :
+- Fond : #880000 (rouge LionTrack)
+- Logo : un lion stylisé ou l'icône actuelle en or (#d4af37)
+- Design simple et reconnaissable même en petite taille
+-->
+
+<!-- Icône temporaire SVG pour développement -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#880000"/>
+  <circle cx="256" cy="256" r="180" fill="#d4af37"/>
+  <text x="256" y="280" font-family="Arial" font-size="160" fill="#880000" text-anchor="middle" font-weight="bold">L</text>
+</svg>

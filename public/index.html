@@ -3,7 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LionTrack - Suivez et gérez vos défis personnels avec motivation">
+  <meta name="theme-color" content="#880000">
   <title>LionTrack - Défis Personnels</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Icônes pour iOS -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/icon-192x192.png">
+  
+  <!-- Meta pour iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LionTrack">
+  
+  <!-- Styles -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link rel="stylesheet" href="css/lion-theme.css">
   <link rel="stylesheet" href="css/challenge-styles.css">
@@ -63,5 +80,83 @@
   <script src="js/chart-manager.js"></script>
   <script src="js/challenge-ui.js"></script>
   <script src="js/rank-system.js"></script>
+  
+  <!-- Service Worker pour PWA -->
+  <script>
+    // Enregistrer le Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('✅ Service Worker enregistré avec succès:', registration.scope);
+            
+            // Vérifier les mises à jour
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // Nouvelle version disponible
+                  if (confirm('Une nouvelle version de LionTrack est disponible. Mettre à jour maintenant?')) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          })
+          .catch(error => {
+            console.error('❌ Erreur lors de l\'enregistrement du Service Worker:', error);
+          });
+      });
+      
+      // Recharger la page quand le nouveau SW prend le contrôle
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+    
+    // Événement avant installation PWA
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      console.log('💾 PWA peut être installée');
+      
+      // Afficher un bouton d'installation personnalisé si souhaité
+      // showInstallPromotion();
+    });
+    
+    // Fonction optionnelle pour afficher une promotion d'installation
+    function showInstallPromotion() {
+      const installBtn = document.createElement('button');
+      installBtn.textContent = '📱 Installer LionTrack';
+      installBtn.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 12px 20px; background: #880000; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+      
+      installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          console.log(`Installation PWA: ${outcome}`);
+          deferredPrompt = null;
+          installBtn.remove();
+        }
+      });
+      
+      document.body.appendChild(installBtn);
+      
+      // Masquer après 10 secondes
+      setTimeout(() => installBtn.remove(), 10000);
+    }
+    
+    // Événement après installation
+    window.addEventListener('appinstalled', () => {
+      console.log('✅ LionTrack a été installé!');
+      deferredPrompt = null;
+    });
+  </script>
 </body>
 </html>
