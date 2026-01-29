@@ -9,6 +9,7 @@ const dbConfig = require('./config/db.config');
 const authRoutes = require('./services/auth/auth.routes');
 const userRoutes = require('./services/user/user.routes');
 const challengeRoutes = require('./services/challenge/challenge.routes');
+const weightRoutes = require('./services/weight/weight.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,6 +28,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/challenges', challengeRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/weight', weightRoutes);
 
 // Connexion à MongoDB et démarrage du serveur
 mongoose.connect(dbConfig.url)

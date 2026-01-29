@@ -311,6 +311,7 @@ function createChallengeSection() {
                 <a href="#dashboard" class="navbar-link active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
                 <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
                 <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
+                <a href="#physique" class="navbar-link"><i class="fas fa-dumbbell"></i> Physique</a>
             </div>
             
             <div class="navbar-profile">
@@ -1631,6 +1632,713 @@ function showSettingsModal() {
         });
     }
 
+    // Fonction pour afficher une notification élégante
+    function showNotification(message, type = 'success') {
+        // Supprimer les notifications existantes
+        const existingNotif = document.querySelector('.lion-notification');
+        if (existingNotif) {
+            existingNotif.remove();
+        }
+
+        const notification = document.createElement('div');
+        notification.className = `lion-notification ${type}`;
+        
+        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        const bgColor = type === 'success' ? '#51cf66' : '#ff6b6b';
+        
+        notification.innerHTML = `
+            <i class="fas ${icon}"></i>
+            <span>${message}</span>
+        `;
+        
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${bgColor};
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10000;
+            font-size: 16px;
+            font-weight: 500;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Supprimer après 3 secondes
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // Ajouter les animations CSS pour les notifications
+    if (!document.getElementById('notification-styles')) {
+        const style = document.createElement('style');
+        style.id = 'notification-styles';
+        style.textContent = `
+            @keyframes slideIn {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            @keyframes slideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Fonction pour gérer la navigation entre les onglets
+    function setupTabNavigation() {
+        document.addEventListener('click', function(e) {
+            const navLink = e.target.closest('.navbar-link');
+            if (!navLink) return;
+            
+            e.preventDefault();
+            
+            // Retirer la classe active de tous les onglets
+            document.querySelectorAll('.navbar-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Ajouter la classe active à l'onglet cliqué
+            navLink.classList.add('active');
+            
+            // Gérer l'affichage selon l'onglet
+            const href = navLink.getAttribute('href');
+            
+            if (href === '#dashboard') {
+                showDashboard();
+            } else if (href === '#physique') {
+                showPhysiqueTab();
+            }
+            // Les autres onglets seront implémentés plus tard
+        });
+    }
+
+    // Afficher le tableau de bord (vue actuelle)
+    function showDashboard() {
+        createChallengeSection();
+        loadChallenges();
+    }
+
+    // Afficher l'onglet Physique
+    function showPhysiqueTab() {
+        const challengeSection = document.getElementById('challenge-section');
+        if (!challengeSection) return;
+        
+        const currentUser = getStoredUser();
+        const profilePhoto = getProfilePhoto(currentUser);
+
+        const content = `
+            <div class="navbar">
+                <div class="navbar-logo">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="LionTrack">
+                    <h3>LionTrack</h3>
+                </div>
+                
+                <div class="navbar-links">
+                    <a href="#dashboard" class="navbar-link"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
+                    <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
+                    <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
+                    <a href="#physique" class="navbar-link active"><i class="fas fa-dumbbell"></i> Physique</a>
+                </div>
+                
+                <div class="navbar-profile">
+                    <div class="profile-dropdown">
+                        <div class="profile-container">
+                            <div class="profile-image">
+                                <img src="${profilePhoto}" alt="Photo de profil">
+                            </div>
+                            <div class="profile-info">
+                                <span class="profile-name" id="user-display"></span>
+                                <div class="profile-rank">
+                                    <img src="https://cdn-icons-png.flaticon.com/512/9241/9241203.png" class="rank-insignia" alt="Grade">
+                                    <span>Capitaine</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dropdown-menu">
+                            <div class="dropdown-item profile-item">
+                                <i class="fas fa-user-circle"></i>
+                                <span>Mon profil</span>
+                            </div>
+                            <div class="dropdown-item settings-item">
+                                <i class="fas fa-cog"></i>
+                                <span>Paramètres</span>
+                            </div>
+                            <div class="dropdown-item logout">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Déconnexion</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-title">Poids Actuel</div>
+                    <div class="stat-value" id="weight-current">-- kg</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Variation 7 jours</div>
+                    <div class="stat-value" id="weight-7days">-- kg</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Variation 30 jours</div>
+                    <div class="stat-value" id="weight-30days">-- kg</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Total Pesées</div>
+                    <div class="stat-value" id="weight-total">0</div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h3><i class="fas fa-weight"></i> Évolution du Poids</h3>
+                <canvas id="weight-chart" height="300"></canvas>
+            </div>
+            
+            <div class="challenge-actions">
+                <h3><i class="fas fa-clipboard-list"></i> Mes Pesées</h3>
+                <div>
+                    <button id="reload-weight-btn" class="icon-btn" title="Actualiser">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button id="add-weight-btn" class="primary-btn">
+                        <i class="fas fa-plus"></i> Ajouter une Pesée
+                    </button>
+                </div>
+            </div>
+            
+            <div id="weight-list" class="challenge-grid"></div>
+        `;
+        
+        challengeSection.innerHTML = content;
+        
+        // Réafficher le nom d'utilisateur
+        if (window.AuthUI && AuthUI.getCurrentUser()) {
+            const userDisplay = document.getElementById('user-display');
+            if (userDisplay) {
+                const currentUser = AuthUI.getCurrentUser();
+                userDisplay.textContent = currentUser.username || currentUser.email;
+            }
+        }
+
+        // Réattacher les écouteurs d'événements de AuthUI
+        if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
+            AuthUI.setupEventListeners();
+        }
+
+        // Charger les données de poids
+        loadWeightData();
+        
+        // Écouteurs d'événements pour l'onglet physique
+        document.getElementById('add-weight-btn').addEventListener('click', showAddWeightModal);
+        document.getElementById('reload-weight-btn').addEventListener('click', loadWeightData);
+    }
+
+    // Charger les données de poids
+    async function loadWeightData() {
+        try {
+            const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+            
+            if (!token) {
+                console.error('Aucun token d\'authentification');
+                return;
+            }
+
+            // Charger toutes les pesées
+            const response = await fetch('/api/weight', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Erreur lors du chargement des pesées');
+            }
+
+            const weights = await response.json();
+            
+            // Charger les statistiques
+            const statsResponse = await fetch('/api/weight/stats', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            let stats = null;
+            if (statsResponse.ok) {
+                stats = await statsResponse.json();
+                updateWeightStats(stats);
+            }
+
+            // Afficher le graphique
+            displayWeightChart(weights);
+            
+            // Afficher la liste des pesées
+            displayWeightList(weights);
+
+        } catch (error) {
+            console.error('Erreur:', error);
+        }
+    }
+
+    // Mettre à jour les statistiques
+    function updateWeightStats(stats) {
+        document.getElementById('weight-current').textContent = `${stats.current.toFixed(1)} kg`;
+        
+        const change7 = stats.change7Days;
+        const change30 = stats.change30Days;
+        
+        document.getElementById('weight-7days').innerHTML = formatWeightChange(change7);
+        document.getElementById('weight-30days').innerHTML = formatWeightChange(change30);
+        document.getElementById('weight-total').textContent = stats.totalEntries;
+    }
+
+    // Formater le changement de poids
+    function formatWeightChange(change) {
+        if (change === 0) return '0 kg';
+        const sign = change > 0 ? '+' : '';
+        const color = change > 0 ? '#ff6b6b' : '#51cf66';
+        return `<span style="color: ${color}">${sign}${change.toFixed(1)} kg</span>`;
+    }
+
+    // Afficher le graphique de poids
+    function displayWeightChart(weights) {
+        const canvas = document.getElementById('weight-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        
+        // Détruire le graphique existant si présent
+        if (window.weightChartInstance) {
+            window.weightChartInstance.destroy();
+        }
+
+        if (weights.length === 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#999';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Aucune donnée disponible', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+
+        // Trier par date croissante
+        weights.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        const labels = weights.map(w => {
+            const date = new Date(w.date);
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            return `${day}/${month}`;
+        });
+        const data = weights.map(w => w.weight);
+
+        window.weightChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Poids (kg)',
+                    data: data,
+                    borderColor: '#ff6b6b',
+                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: '#ff6b6b',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        bottom: 20
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: '#ffd700',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffd700',
+                        bodyColor: '#fff',
+                        borderColor: '#ff6b6b',
+                        borderWidth: 1,
+                        callbacks: {
+                            title: function(context) {
+                                const index = context[0].dataIndex;
+                                const date = new Date(weights[index].date);
+                                return date.toLocaleDateString('fr-FR', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                });
+                            },
+                            label: function(context) {
+                                return `Poids: ${context.parsed.y.toFixed(1)} kg`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: 'Poids (kg)',
+                            color: '#ffd700',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            color: '#ffd700',
+                            font: {
+                                size: 12
+                            },
+                            callback: function(value) {
+                                return value.toFixed(1) + ' kg';
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 215, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Date',
+                            color: '#ffd700',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        ticks: {
+                            color: '#ffd700',
+                            font: {
+                                size: 11
+                            },
+                            maxRotation: 45,
+                            minRotation: 0
+                        },
+                        grid: {
+                            color: 'rgba(255, 215, 0, 0.1)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Afficher la liste des pesées
+    function displayWeightList(weights) {
+        const weightList = document.getElementById('weight-list');
+        if (!weightList) return;
+
+        weightList.innerHTML = '';
+
+        if (weights.length === 0) {
+            weightList.innerHTML = `
+                <div class="no-challenges">
+                    <i class="fas fa-weight fa-3x"></i>
+                    <h3>Aucune pesée enregistrée</h3>
+                    <p>Commencez à suivre votre poids en ajoutant votre première pesée.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Trier par date décroissante
+        weights.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        weights.forEach(weight => {
+            const card = document.createElement('div');
+            card.className = 'challenge-card';
+            card.innerHTML = `
+                <div class="challenge-header">
+                    <h4 class="challenge-title">${weight.weight.toFixed(1)} kg</h4>
+                    <div class="challenge-actions">
+                        <button class="icon-btn edit-weight-btn" data-id="${weight._id}" data-weight="${weight.weight}" data-date="${weight.date}" data-note="${weight.note || ''}" title="Modifier">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="icon-btn delete-weight-btn" data-id="${weight._id}" title="Supprimer">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                ${weight.note ? `<p class="challenge-description">${weight.note}</p>` : ''}
+                <div class="challenge-footer">
+                    <span class="challenge-date">
+                        <i class="fas fa-calendar-alt"></i> 
+                        ${new Date(weight.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </span>
+                </div>
+            `;
+            weightList.appendChild(card);
+        });
+
+        // Ajouter les écouteurs pour l'édition
+        document.querySelectorAll('.edit-weight-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const weightId = this.getAttribute('data-id');
+                const weightValue = parseFloat(this.getAttribute('data-weight'));
+                const date = this.getAttribute('data-date');
+                const note = this.getAttribute('data-note');
+                showEditWeightModal(weightId, weightValue, date, note);
+            });
+        });
+
+        // Ajouter les écouteurs pour la suppression
+        document.querySelectorAll('.delete-weight-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const weightId = this.getAttribute('data-id');
+                deleteWeight(weightId);
+            });
+        });
+    }
+
+    // Modal pour ajouter une pesée
+    function showAddWeightModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-weight"></i> Ajouter une Pesée</h2>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="add-weight-form">
+                    <div class="form-group">
+                        <label for="weight-input">Poids (kg) *</label>
+                        <input type="number" id="weight-input" step="0.1" min="0" max="500" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="weight-date">Date</label>
+                        <input type="date" id="weight-date" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    <div class="form-group">
+                        <label for="weight-note">Note (optionnel)</label>
+                        <textarea id="weight-note" placeholder="Ex: Matin à jeun, après sport..." rows="3"></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="secondary-btn cancel-btn">Annuler</button>
+                        <button type="submit" class="primary-btn">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        modal.style.display = 'flex';
+
+        // Fermer la modal
+        modal.querySelector('.close-modal').addEventListener('click', () => {
+            modal.remove();
+        });
+
+        modal.querySelector('.cancel-btn').addEventListener('click', () => {
+            modal.remove();
+        });
+
+        // Soumettre le formulaire
+        modal.querySelector('#add-weight-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const weightValue = parseFloat(document.getElementById('weight-input').value);
+            const date = document.getElementById('weight-date').value;
+            const note = document.getElementById('weight-note').value;
+
+            try {
+                const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+
+                const response = await fetch('/api/weight', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        weight: weightValue,
+                        date: date,
+                        note: note
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erreur lors de l\'ajout de la pesée');
+                }
+
+                modal.remove();
+                loadWeightData(); // Recharger les données
+                
+                // Afficher une notification de succès
+                showNotification('Pesée enregistrée avec succès !', 'success');
+
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('Erreur lors de l\'ajout de la pesée', 'error');
+            }
+        });
+    }
+
+    // Modal pour éditer une pesée
+    function showEditWeightModal(weightId, currentWeight, currentDate, currentNote) {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        
+        // Formater la date pour l'input
+        const formattedDate = new Date(currentDate).toISOString().split('T')[0];
+        
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-edit"></i> Modifier la Pesée</h2>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="edit-weight-form">
+                    <div class="form-group">
+                        <label for="edit-weight-input">Poids (kg) *</label>
+                        <input type="number" id="edit-weight-input" step="0.1" min="0" max="500" value="${currentWeight}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-weight-date">Date</label>
+                        <input type="date" id="edit-weight-date" value="${formattedDate}">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-weight-note">Note (optionnel)</label>
+                        <textarea id="edit-weight-note" placeholder="Ex: Matin à jeun, après sport..." rows="3">${currentNote}</textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="secondary-btn cancel-btn">Annuler</button>
+                        <button type="submit" class="primary-btn">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        modal.style.display = 'flex';
+
+        // Fermer la modal
+        modal.querySelector('.close-modal').addEventListener('click', () => {
+            modal.remove();
+        });
+
+        modal.querySelector('.cancel-btn').addEventListener('click', () => {
+            modal.remove();
+        });
+
+        // Soumettre le formulaire
+        modal.querySelector('#edit-weight-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const weightValue = parseFloat(document.getElementById('edit-weight-input').value);
+            const date = document.getElementById('edit-weight-date').value;
+            const note = document.getElementById('edit-weight-note').value;
+
+            try {
+                const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+
+                const response = await fetch(`/api/weight/${weightId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        weight: weightValue,
+                        date: date,
+                        note: note
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erreur lors de la modification de la pesée');
+                }
+
+                modal.remove();
+                loadWeightData(); // Recharger les données
+                
+                // Afficher une notification de succès
+                showNotification('Pesée modifiée avec succès !', 'success');
+
+            } catch (error) {
+                console.error('Erreur:', error);
+                showNotification('Erreur lors de la modification de la pesée', 'error');
+            }
+        });
+    }
+
+    // Supprimer une pesée
+    async function deleteWeight(weightId) {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette pesée ?')) {
+            return;
+        }
+
+        try {
+            const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
+
+            const response = await fetch(`/api/weight/${weightId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Erreur lors de la suppression');
+            }
+
+            loadWeightData(); // Recharger les données
+            showNotification('Pesée supprimée avec succès !', 'success');
+
+        } catch (error) {
+            console.error('Erreur:', error);
+            showNotification('Erreur lors de la suppression de la pesée', 'error');
+        }
+    }
+
     // API publique du module
     return {
         init,
@@ -1641,13 +2349,16 @@ function showSettingsModal() {
         deleteChallenge,
         showSettingsModal,           // Ajout à l'API publique
         showProfileModal,            // Ajout à l'API publique
-        showChangePasswordModal      // Ajout à l'API publique
+        showChangePasswordModal,     // Ajout à l'API publique
+        showPhysiqueTab,             // Ajout de la fonction publique
+        setupTabNavigation           // Ajout de la navigation
     };
 })();
 
 // Initialiser l'UI des défis au chargement du document
 document.addEventListener('DOMContentLoaded', () => {
     ChallengeUI.init();
+    ChallengeUI.setupTabNavigation(); // Activer la navigation par onglets
     if (window.chartManager) {
         // Intégration possible avec le module chart-manager.js
     }
