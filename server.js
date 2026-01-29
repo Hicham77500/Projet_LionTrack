@@ -18,6 +18,61 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static('public'));
 
+// ============================================================================
+// ROUTES DE SANTÉ ET MONITORING
+// ============================================================================
+
+// Endpoint de santé (utilisé par Airflow)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Endpoint pour les statistiques (protégé pour Airflow)
+app.get('/api/admin/statistics', (req, res) => {
+  // Vérifier l'authentification Airflow
+  const airflowToken = req.headers['x-airflow-authorization'];
+  const validToken = process.env.AIRFLOW_API_TOKEN;
+  
+  if (airflowToken !== validToken && process.env.NODE_ENV === 'production') {
+    return res.status(401).json({ message: 'Non autorisé' });
+  }
+  
+  // Retourner les stats depuis MongoDB
+  mongoose.connection.db.collection('statistics')
+    .find({})
+    .sort({ date: -1 })
+    .limit(30)
+    .toArray((err, stats) => {
+      if (err) return res.status(500).json({ message: err.message });
+      res.json({ statistics: stats });
+    });
+});
+
+// Endpoint pour déclencher une tâche Airflow manuellement
+app.post('/api/admin/trigger-backup', (req, res) => {
+  const airflowToken = req.headers['x-airflow-authorization'];
+  const validToken = process.env.AIRFLOW_API_TOKEN;
+  
+  if (airflowToken !== validToken && process.env.NODE_ENV === 'production') {
+    return res.status(401).json({ message: 'Non autorisé' });
+  }
+  
+  // Appeler l'API Airflow pour déclencher le DAG
+  const airflowBaseUrl = process.env.AIRFLOW_BASE_URL || 'http://localhost:8080';
+  const dagId = 'liontrack_daily_operations';
+  
+  res.json({
+    message: 'Backup déclenché via Airflow',
+    dag_id: dagId,
+    trigger_url: `${airflowBaseUrl}/api/v1/dags/${dagId}/dagRuns`
+  });
+});
+
 // Route de base
 app.get('/', (req, res) => {
   res.send('Bienvenue sur l\'API Défis Personnels');
