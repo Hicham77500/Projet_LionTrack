@@ -1926,6 +1926,44 @@ function showSettingsModal() {
         return `<span style="color: ${color}">${sign}${change.toFixed(1)} kg</span>`;
     }
 
+    // Calculer la tendance (pente) basée sur les derniers poids
+    function calculateTrend(weights) {
+        if (weights.length < 2) return 0;
+        const n = weights.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        
+        for (let i = 0; i < n; i++) {
+            const x = i;
+            const y = weights[i].weight;
+            sumX += x;
+            sumY += y;
+            sumXY += x * y;
+            sumX2 += x * x;
+        }
+        
+        return (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    }
+
+    // Générer les données de prédiction
+    function generatePredictionData(lastWeight, trend, days) {
+        const predictions = [];
+        let currentDate = new Date(lastWeight.date);
+        let currentWeight = lastWeight.weight;
+        
+        for (let i = 1; i <= days; i++) {
+            currentDate = new Date(currentDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+            currentWeight += trend;
+            
+            predictions.push({
+                date: new Date(currentDate),
+                weight: currentWeight
+            });
+        }
+        
+        return predictions;
+    }
+
     // Afficher le graphique de poids
     function displayWeightChart(weights) {
         const canvas = document.getElementById('weight-chart');
@@ -1958,24 +1996,62 @@ function showSettingsModal() {
         });
         const data = weights.map(w => w.weight);
 
+        // Calculer la tendance et générer les prédictions
+        const recentWeights = weights.slice(-7);
+        const trend = calculateTrend(recentWeights);
+        const predictions = generatePredictionData(weights[weights.length - 1], trend, 7);
+        
+        // Préparer les labels et données de prédiction
+        const predictionLabels = predictions.map(p => {
+            const day = p.date.getDate().toString().padStart(2, '0');
+            const month = (p.date.getMonth() + 1).toString().padStart(2, '0');
+            return `${day}/${month}`;
+        });
+        const predictionValues = predictions.map(p => p.weight);
+        
+        // Créer les datasets avec null pour maintenir l'alignement
+        const actualData = [...data, ...Array(7).fill(null)];
+        const predictionData = [...Array(data.length).fill(null), predictions[0].weight, ...predictionValues];
+        
+        // Déterminer la couleur de prédiction
+        const predictionColor = trend < 0 ? '#51cf66' : '#ff6b6b';
+        const predictionBgColor = trend < 0 ? 'rgba(81, 207, 102, 0.1)' : 'rgba(255, 107, 107, 0.1)';
+
         window.weightChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Poids (kg)',
-                    data: data,
-                    borderColor: '#ff6b6b',
-                    backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 5,
-                    pointHoverRadius: 7,
-                    pointBackgroundColor: '#ff6b6b',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2
-                }]
+                labels: [...labels, ...predictionLabels],
+                datasets: [
+                    {
+                        label: 'Poids (kg)',
+                        data: actualData,
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: '#ff6b6b',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    },
+                    {
+                        label: `Prédiction 7j (${trend < 0 ? '📉 Perte' : '📈 Gain'}: ${Math.abs(trend).toFixed(2)} kg/j)`,
+                        data: predictionData,
+                        borderColor: predictionColor,
+                        backgroundColor: predictionBgColor,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: predictionColor,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 1,
+                        borderDash: [5, 5]
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -2004,17 +2080,13 @@ function showSettingsModal() {
                         borderWidth: 1,
                         callbacks: {
                             title: function(context) {
-                                const index = context[0].dataIndex;
-                                const date = new Date(weights[index].date);
-                                return date.toLocaleDateString('fr-FR', { 
-                                    weekday: 'long', 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                });
+                                return context[0].label;
                             },
                             label: function(context) {
-                                return `Poids: ${context.parsed.y.toFixed(1)} kg`;
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.y;
+                                if (value === null) return '';
+                                return `${label}: ${value.toFixed(1)} kg`;
                             }
                         }
                     }
