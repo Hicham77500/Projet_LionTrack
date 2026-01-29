@@ -113,7 +113,12 @@ const ChallengeUI = (function() {
             });
         }
 
-        // Ajouter des gestionnaires d'événements pour le menu déroulant
+        // Ajouter les gestionnaires d'événements pour le menu profil
+        setupProfileMenu();
+    }
+
+    // Fonction dédiée pour configurer le menu profil (peut être rappelée)
+    function setupProfileMenu() {
         const profileContainer = document.querySelector('.profile-container');
         const dropdownMenu = document.querySelector('.dropdown-menu');
         
@@ -177,9 +182,9 @@ const ChallengeUI = (function() {
                 });
             }
         }
-
-        // Les autres boutons dynamiques sont ajoutés lors de la création des cartes
     }
+
+    // Les autres boutons dynamiques sont ajoutés lors de la création des cartes
 
     // Charger les défis de l'utilisateur
     async function loadChallenges() {
@@ -1850,6 +1855,9 @@ function showSettingsModal() {
         if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
             AuthUI.setupEventListeners();
         }
+
+        // Réattacher le menu profil (important pour les changements d'onglet)
+        setupProfileMenu();
 
         // Charger les données de poids
         loadWeightData();
