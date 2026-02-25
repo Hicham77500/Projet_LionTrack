@@ -1,88 +1,71 @@
-# 🔄 Instructions de Mise à Jour Azure - LionTrack
+# ⚙️ Configuration Azure - LionTrack
 
-## ✅ Modifications Effectuées
+## 🚨 URGENT : Variables d'environnement manquantes
 
-### 1. Mise à jour Node.js vers 22 LTS
-- **package.json** : Node >= 22.0.0 (au lieu de 18.0.0)
-- **GitHub Actions** : Node 22.x (au lieu de 20.x)
+Ton app tourne dans le vide car **les variables d'environnement ne sont pas configurées sur Azure**.
 
-### 2. Correction GitHub Actions
-- Suppression du paramètre `slot-name: 'Production'` qui causait l'erreur 404
+### 📋 Variables à ajouter
 
-## 📋 Actions à Effectuer sur Azure Portal
+Va sur le portail Azure et configure ces variables :
 
-### Étape 1 : Mettre à jour le Runtime Node.js
+**1. Accède à la configuration :**
+- Portail Azure → **LionTrack** (App Service)
+- Menu de gauche → **Configuration**
+- Onglet **Application settings**
 
-1. Connectez-vous au [Portail Azure](https://portal.azure.com)
-2. Accédez à votre App Service **LionTrack**
-3. Dans le menu de gauche, allez dans **Configuration** > **General settings**
-4. Changez **Stack** : 
-   - De : `Node 20-lts`
-   - Vers : `Node 22-lts`
-5. Cliquez sur **Save** en haut
-6. Cliquez sur **Continue** pour confirmer
+**2. Clique sur "New application setting" et ajoute :**
 
-### Étape 2 : Nettoyer le Tableau de Bord Azure
+| Nom | Valeur |
+|-----|--------|
+| `MONGODB_URI` | `mongodb+srv://hguendouz77500_db_user:rSeEonEwIxvvu6YT@cluster0.2ycytk4.mongodb.net/?appName=Cluster0` |
+| `JWT_SECRET` | `S5q9kISVWfJ+j+/r/dt+6MfRdCmAERsgziIaI0Xppm4=` |
+| `NODE_ENV` | `production` |
 
-L'erreur 404 que vous avez vue concernait un ancien slot. Pour nettoyer :
+**3. Sauvegarde :**
+- Clique sur **Save** en haut
+- L'app va redémarrer automatiquement
 
-1. Allez sur le **Tableau de bord** Azure
-2. Trouvez la vignette épinglée qui fait référence à `fxerefd7gneqfqac`
-3. Faites un clic droit > **Détacher du tableau de bord**
-4. Épinglez à nouveau votre App Service actuel si nécessaire
-
-### Étape 3 : Déclencher un Nouveau Déploiement
-
-Deux options :
-
-**Option A - Via GitHub (Recommandé)** :
-```bash
-git add .
-git commit -m "chore: update to Node 22 LTS"
-git push origin main
-```
-
-**Option B - Via Azure Portal** :
-1. Allez dans **Centre de déploiement**
-2. Cliquez sur **Sync** pour synchroniser avec GitHub
-3. Vérifiez les **Journaux de déploiement**
-
-## 🔍 Vérification
-
-Après le déploiement, vérifiez :
-
-1. **URL de l'application** : https://liontrack-fxerefd7gneqfqac.francecentral-01.azurewebsites.net
-2. **Runtime** doit afficher "Aucun problème détecté"
-3. **GitHub Actions** : Vérifiez que le workflow se termine avec succès
-
-## 📊 Informations Actuelles
-
-- **Resource Group** : LionTrackMindset_group
-- **Subscription ID** : ef865a19-2360-401b-822e-5fcee276b077
-- **Region** : France Central
-- **Plan** : ASP-LionTrackMindsetgroup-bbbd (B1)
-- **GitHub Repo** : https://github.com/Hicham77500/Projet_LionTrack
-
-## ⚠️ Notes Importantes
-
-- **Node 22 LTS** est supporté jusqu'à **avril 2027** (vs Node 20 jusqu'à avril 2026)
-- Le slot de déploiement a été retiré de la configuration pour éviter les erreurs
-- Assurez-vous que votre secret GitHub `AZURE_WEBAPP_PUBLISH_PROFILE` est toujours valide
-
-## 🆘 En Cas de Problème
-
-Si le déploiement échoue :
-
-1. Vérifiez les logs GitHub Actions
-2. Consultez les **Logs de diagnostic** Azure :
-   - App Service > **Log stream**
-   - App Service > **Diagnose and solve problems**
-
-3. Vérifiez que toutes les variables d'environnement sont configurées dans Azure :
-   - **Configuration** > **Application settings**
+**4. Vérifie :**
+- Attends 1-2 minutes
+- Ouvre : https://liontrack-fxerefd7gneqfqac.francecentral-01.azurewebsites.net
+- Tu devrais voir : "Bienvenue sur l'API Défis Personnels"
 
 ---
 
-**Date de mise à jour** : 25 février 2026
-**Version Node.js** : 22 LTS
-**Status EOL** : ✅ Sécurisé jusqu'en 2027
+## 🔍 Pourquoi ça ne marchait pas ?
+
+Les logs Azure montraient :
+```
+📌 Port: 4001                    ❌ Devrait être 8080 (port Azure)
+MongoDB: localhost:3000          ❌ Devrait être MongoDB Atlas
+```
+
+**Cause :** Le fichier `.env` est ignoré par Git (`.gitignore`) donc n'est **pas déployé sur Azure**.
+
+**Solution :** Configurer les variables directement dans Azure Portal.
+
+---
+
+## ✅ Ce qui a été corrigé dans le code
+
+1. ✅ `server.js` : Utilise `process.env.PORT` (port dynamique Azure)
+2. ✅ `.env` local : Retiré `PORT=4001` qui écrasait le port
+3. ✅ Workflow GitHub Actions : Deploy automatique sur push
+
+---
+
+## 📊 Vérifier les logs Azure
+
+Si ça ne marche toujours pas :
+
+1. **App Service LionTrack** → **Log stream**
+2. Tu devrais voir :
+```
+✅ Connecté à MongoDB Atlas
+✅ Serveur en écoute sur le port 8080
+```
+
+---
+
+**Date** : 25 février 2026  
+**Status** : ⚠️ En attente configuration Azure Portal
