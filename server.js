@@ -14,7 +14,7 @@ const weightRoutes = require('./services/weight/weight.routes');
 const analyticsRoutes = require('./services/analytics/analytics.routes');
 
 const app = express();
-const PORT = 4001;
+const PORT = process.env.PORT || 4001;
 
 // ============================================================================
 // VALIDATION DE LA CONFIGURATION AU DÉMARRAGE
