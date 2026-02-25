@@ -39,7 +39,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     permissions:
-      id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
 
     steps:
@@ -48,18 +47,12 @@ jobs:
         with:
           name: node-app
       
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_51FD1A53D9A64A3F84E693DBEF9848B2 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F0A5D2B00F1B46718D90651684258213 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F263C03BCC0C42ADB54BE692AF8541E9 }}
-
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'LionTrack'
           slot-name: 'Production'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: .
           
