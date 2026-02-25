@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - liontrack
+name: Build and deploy Node.js app to Azure Web App - LionTrack
 
 on:
   push:
@@ -51,15 +51,15 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C6600A4453F144E28D72BB3DEC151BAE }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_829EA129417C4413A4A445D19C8B6FC3 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_13FAF47356464353A6974088166E4E7D }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_51FD1A53D9A64A3F84E693DBEF9848B2 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F0A5D2B00F1B46718D90651684258213 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F263C03BCC0C42ADB54BE692AF8541E9 }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'liontrack'
+          app-name: 'LionTrack'
           slot-name: 'Production'
           package: .
           
