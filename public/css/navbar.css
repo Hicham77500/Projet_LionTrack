@@ -45,6 +45,14 @@
     color: var(--accent-gold);
 }
 
+.navbar-link.rewards-link {
+    color: var(--text-color);
+}
+
+.navbar-link.rewards-link.active {
+    color: var(--accent-gold);
+}
+
 .navbar-profile {
     display: flex;
     align-items: center;

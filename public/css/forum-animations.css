@@ -1,0 +1,431 @@
+/* ======================================================================
+   FORUM - Améliorations CSS & Animations bonus
+   À ajouter à forum-styles.css pour plus d'polish
+====================================================================== */
+
+/* ==================== ANIMATIONS AVANCÉES ==================== */
+
+/* Pulse animé pour badges de notif */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(204, 0, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(204, 0, 0, 0);
+  }
+}
+
+.notification-badge {
+  animation: pulse 2s infinite;
+}
+
+/* Hover effet ripple sur les cartes */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.subject-item::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(212, 175, 55, 0.3);
+  transform: translate(-50%, -50%);
+  animation: ripple 0.6s ease-out;
+  opacity: 0;
+}
+
+.subject-item:active::after {
+  animation: ripple 0.6s ease-out;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ==================== SKELETON LOADING ==================== */
+
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 12px;
+  padding: 16px;
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05), rgba(212, 175, 55, 0.1));
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-title {
+  width: 60%;
+  height: 20px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05), rgba(212, 175, 55, 0.1));
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-line {
+  width: 100%;
+  height: 16px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05), rgba(212, 175, 55, 0.1));
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+/* ==================== SCROLLBAR PERSONNALISÉE ==================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--accent-gold), var(--light-red));
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--light-red), var(--accent-gold));
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: linear-gradient(180deg, var(--accent-gold), var(--light-red)) rgba(0, 0, 0, 0.2);
+}
+
+/* ==================== BACKDROP BLUR EFFECTS ==================== */
+
+@supports (backdrop-filter: blur(10px)) {
+  .modal-overlay {
+    backdrop-filter: blur(4px);
+  }
+
+  .dropdown-menu {
+    backdrop-filter: blur(10px);
+    background-color: rgba(30, 30, 30, 0.9);
+  }
+}
+
+/* ==================== DARK/LIGHT MODE SUPPORT ==================== */
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --dark-red: #bb0000;
+    --medium-red: #cc0000;
+    --light-red: #ff0000;
+    --dark-bg: #f5f5f5;
+    --card-bg: #ffffff;
+    --text-color: #1a1a1a;
+  }
+
+  .forum-header {
+    background-color: var(--dark-red);
+    color: white;
+  }
+
+  .subject-item {
+    background-color: #fafafa;
+    border: 1px solid #e0e0e0;
+  }
+
+  .subject-title {
+    color: #333;
+  }
+}
+
+/* ==================== CONTRASTE ET ACCESSIBILITÉ ==================== */
+
+@media (prefers-contrast: more) {
+  .subject-item {
+    border-width: 2px;
+  }
+
+  .grade-badge {
+    font-weight: 900;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .btn-primary {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==================== HOVER & FOCUS STATES ==================== */
+
+/* Focus visible pour accessibility */
+.subject-item:focus-visible,
+.category-item:focus-visible,
+.btn-primary:focus-visible {
+  outline: 3px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+
+/* Active states */
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.subject-item:active {
+  opacity: 0.9;
+}
+
+/* ==================== PRINT STYLES ==================== */
+
+@media print {
+  .forum-header,
+  .forum-sidebar,
+  .view-controls,
+  .pagination,
+  .new-subject-fab,
+  .notifications-container {
+    display: none !important;
+  }
+
+  .subject-item {
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+  }
+
+  .forum-main {
+    padding: 0;
+  }
+}
+
+/* ==================== TOUCH & MOBILE OPTIMIZATIONS ==================== */
+
+@media (pointer: coarse) {
+  /* Augmenter les hitboxes sur mobile */
+  .subject-item {
+    padding: 20px;
+  }
+
+  .action-btn {
+    padding: 12px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 14px 24px;
+    min-height: 48px;
+  }
+
+  /* Supprimer hover effects remplacés par active */
+  .subject-item:hover {
+    background-color: var(--card-bg);
+  }
+}
+
+/* ==================== CUSTOM CURSORS ==================== */
+
+.subject-item {
+  cursor: pointer;
+}
+
+.action-btn {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ==================== GRADIENTS AVANCÉS ==================== */
+
+.forum-header {
+  background: linear-gradient(135deg, var(--dark-red) 0%, var(--medium-red) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.forum-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+  animation: moveBackground 20s linear infinite;
+  opacity: 0.1;
+  z-index: 0;
+}
+
+.forum-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes moveBackground {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(20px, 20px); }
+}
+
+/* ==================== CARD ELEVATION ==================== */
+
+.subject-item {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.subject-item:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content {
+  box-shadow: 
+    0 20px 25px -5px rgba(0, 0, 0, 0.4),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* ==================== BADGE ANIMATIONS ==================== */
+
+@keyframes badgeFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.category-badge {
+  animation: badgeFloat 3s ease-in-out infinite;
+}
+
+@keyframes badgeGlow {
+  0%, 100% { text-shadow: 0 0 5px transparent; }
+  50% { text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); }
+}
+
+.grade-admin {
+  animation: badgeGlow 2s ease-in-out infinite;
+}
+
+/* ==================== TRANSITION GLOBALES ==================== */
+
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Optimiser les transitions (ne pas tout animer) */
+input,
+textarea,
+select {
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ==================== EMPTY STATES ART ==================== */
+
+.no-results-state i {
+  font-size: 4rem;
+  opacity: 0.5;
+  margin-bottom: 20px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+/* ==================== LOADING INDICATOR STACKED ==================== */
+
+.spinner::before,
+.spinner::after {
+  content: '';
+  position: absolute;
+  border: 4px solid rgba(212, 175, 55, 0.2);
+  border-radius: 50%;
+}
+
+.spinner::before {
+  width: 65px;
+  height: 65px;
+  animation: spin 2s linear infinite;
+}
+
+.spinner::after {
+  width: 80px;
+  height: 80px;
+  animation: spin 3s linear infinite reverse;
+}
+
+/* ==================== FORM FIELD FOCUS GLOW ==================== */
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+}
+
+/* ==================== RESPONSIVE TYPOGRAPHY ==================== */
+
+@media (min-width: 1200px) {
+  .forum-title {
+    font-size: 1.5rem;
+  }
+
+  .subject-title {
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .forum-title {
+    font-size: 1rem;
+  }
+
+  .subject-title {
+    font-size: 1rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+  }
+}

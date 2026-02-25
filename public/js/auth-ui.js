@@ -7,6 +7,7 @@
 const AuthUI = (function() {
     // Variables privées
     let token = null;
+    let refreshToken = null;
     let currentUser = null;
     
     // Citations motivantes pour le thème Lion Mindset
@@ -20,7 +21,7 @@ const AuthUI = (function() {
 
     // Fonction pour initialiser l'UI d'authentification
     function init() {
-        // Vérifier si un token est stocké dans le localStorage
+        // Vérifier si un token est stocké et s'il est valide
         checkExistingAuth();
         
         // Ajouter les écouteurs d'événements pour les boutons d'authentification
@@ -29,24 +30,88 @@ const AuthUI = (function() {
         // Afficher une citation motivante aléatoire
         showRandomQuote();
     }
+    
+    // Fonction utilitaire pour nettoyer complètement la session
+    function clearSession() {
+        // Liste des clés à supprimer
+        const keysToRemove = [
+            'token',
+            'refreshToken',
+            'user',
+            'userBio',
+            'userRank',
+            'completedChallenges',
+            'reactQueryDevtoolsSortFn'
+        ];
+        
+        // Supprimer les clés connues
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        // Supprimer les photos de profil (clés dynamiques)
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('profilePhoto:')) {
+                localStorage.removeItem(key);
+            }
+        });
+        
+        // Réinitialiser les variables en mémoire
+        token = null;
+        refreshToken = null;
+        currentUser = null;
+    }
 
     // Vérifier l'authentification existante
-    function checkExistingAuth() {
+    async function checkExistingAuth(retryAttempted = false) {
+        // PAR DÉFAUT : toujours afficher la page de connexion d'abord
+        showLoginUI();
+        
         const storedToken = localStorage.getItem('token');
+        const storedRefreshToken = localStorage.getItem('refreshToken');
         const storedUser = localStorage.getItem('user');
         
         if (storedToken && storedUser) {
             try {
+                // Vérifier la validité du token en appelant une route protégée
+                const response = await fetch('/api/users/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + storedToken
+                    }
+                });
+                
+                // Si le token est invalide ou expiré -> RESTER sur la page de connexion
+                if (!response.ok) {
+                    if (response.status === 401 && storedRefreshToken && !retryAttempted) {
+                        const refreshed = await refreshAccessToken();
+                        if (refreshed) {
+                            return checkExistingAuth(true);
+                        }
+                    }
+                    console.log('Token invalide ou expiré, nettoyage de la session');
+                    clearSession();
+                    showLoginUI();
+                    return false;
+                }
+                
+                // Token valide, restaurer la session
                 token = storedToken;
+                refreshToken = storedRefreshToken;
                 currentUser = JSON.parse(storedUser);
                 
-                // Afficher l'UI authentifiée
+                // SEULEMENT MAINTENANT : Afficher l'UI authentifiée
                 showAuthenticatedUI();
                 
-                // MODIFICATION ICI : Charger automatiquement les défis lors d'une authentification existante
+                // Charger automatiquement les défis
                 if (window.ChallengeUI && typeof ChallengeUI.loadChallenges === 'function') {
                     setTimeout(() => {
-                        ChallengeUI.loadChallenges();
+                        ChallengeUI.loadChallenges().catch(error => {
+                            console.error('Erreur lors du chargement des défis:', error);
+                            // Si erreur 401, rediriger vers connexion
+                            if (error.message && (error.message.includes('401') || error.message.includes('unauthorized'))) {
+                                clearSession();
+                                showLoginUI();
+                            }
+                        });
                     }, 100);
                 }
                 
@@ -54,12 +119,23 @@ const AuthUI = (function() {
             } catch (error) {
                 console.error('Erreur lors de la vérification de l\'authentification:', error);
                 // En cas d'erreur, supprimer les informations d'authentification
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+                clearSession();
+                showLoginUI();
             }
         }
         
         return false;
+    }
+
+    // Affiche le formulaire de connexion
+    function showLoginUI() {
+        const authSection = document.getElementById('auth-section');
+        const registerSection = document.getElementById('register-section');
+        const challengeSection = document.getElementById('challenge-section');
+        
+        if (authSection) authSection.classList.remove('hidden');
+        if (registerSection) registerSection.classList.add('hidden');
+        if (challengeSection) challengeSection.classList.add('hidden');
     }
 
     // Affiche une citation motivante aléatoire
@@ -83,6 +159,24 @@ const AuthUI = (function() {
         const loginBtn = document.getElementById('login-btn');
         if (loginBtn) {
             loginBtn.addEventListener('click', handleLogin);
+        }
+
+        const loginEmail = document.getElementById('login-email');
+        if (loginEmail) {
+            loginEmail.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    handleLogin(event);
+                }
+            });
+        }
+
+        const loginPassword = document.getElementById('login-password');
+        if (loginPassword) {
+            loginPassword.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    handleLogin(event);
+                }
+            });
         }
         
         // Bouton de déconnexion
@@ -199,7 +293,9 @@ const AuthUI = (function() {
 
     // Ensuite, dans handleLogin, assurez-vous que ces fonctions sont utilisées correctement
     async function handleLogin(event) {
-        event.preventDefault();
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
         
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
@@ -228,9 +324,11 @@ const AuthUI = (function() {
             
             // Stocker le token et les infos utilisateur
             token = data.token;
+            refreshToken = data.refreshToken;
             currentUser = data.user;
             
             localStorage.setItem('token', token);
+            localStorage.setItem('refreshToken', refreshToken);
             localStorage.setItem('user', JSON.stringify(currentUser));
             
             showNotification('success', 'Connexion réussie!');
@@ -262,18 +360,23 @@ const AuthUI = (function() {
     }
 
     // Gère le processus de déconnexion
-    function handleLogout() {
-        // Supprimer le token et les infos utilisateur
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        currentUser = null;
-        
-        // Rediriger vers la page de connexion
-        const authSection = document.getElementById('auth-section');
-        const challengeSection = document.getElementById('challenge-section');
-        
-        if (authSection) authSection.classList.remove('hidden');
-        if (challengeSection) challengeSection.classList.add('hidden');
+    async function handleLogout() {
+        const storedRefreshToken = refreshToken || localStorage.getItem('refreshToken');
+        if (storedRefreshToken) {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken: storedRefreshToken })
+                });
+            } catch (error) {
+                console.error('Erreur lors de la deconnexion:', error);
+            }
+        }
+
+        // Nettoyer complètement la session
+        clearSession();
+        showLoginUI();
         
         // Réinitialiser le formulaire de connexion
         const loginForm = document.getElementById('login-form');
@@ -283,6 +386,7 @@ const AuthUI = (function() {
         showNotification('success', 'Vous avez été déconnecté avec succès');
         
         // Restaurer l'animation d'entrée
+        const authSection = document.getElementById('auth-section');
         if (authSection) {
             authSection.style.animation = 'fadeIn 0.5s ease-out forwards';
         }
@@ -367,7 +471,11 @@ const AuthUI = (function() {
         
         if (authSection) authSection.classList.remove('hidden');
         if (registerSection) registerSection.classList.add('hidden');
-        if (challengeSection) challengeSection.classList.add('hidden');
+        if (challengeSection) {
+            challengeSection.classList.add('hidden');
+            challengeSection.style.display = 'none';
+            challengeSection.innerHTML = '';
+        }
     }
 
     // Affiche une notification stylisée
@@ -405,6 +513,33 @@ const AuthUI = (function() {
         return token;
     }
 
+    async function refreshAccessToken() {
+        const storedRefreshToken = refreshToken || localStorage.getItem('refreshToken');
+        if (!storedRefreshToken) {
+            return false;
+        }
+        try {
+            const response = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken: storedRefreshToken })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Refresh token invalide');
+            }
+
+            token = data.token;
+            refreshToken = data.refreshToken;
+            localStorage.setItem('token', token);
+            localStorage.setItem('refreshToken', refreshToken);
+            return true;
+        } catch (error) {
+            console.error('Erreur lors du refresh token:', error);
+            return false;
+        }
+    }
+
     // Fonction pour obtenir l'utilisateur courant (pour les autres modules)
     function getCurrentUser() {
         return currentUser;
@@ -429,8 +564,10 @@ const AuthUI = (function() {
         handleLogout,
         showNotification,
         getToken,
+        refreshAccessToken,
         getCurrentUser,
-        updateCurrentUser  // Ajoutez cette ligne
+        updateCurrentUser,
+        clearSession  // Fonction pour nettoyer complètement la session
     };
 })();
 

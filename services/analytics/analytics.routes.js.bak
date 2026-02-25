@@ -1,0 +1,137 @@
+/**
+ * Analytics API Routes pour LionTrack
+ * Expose les données de la Data Warehouse
+ */
+
+const express = require('express');
+const router = express.Router();
+const { verifyToken } = require('../middlewares/authJwt');
+const analyticsController = require('./analytics.controller');
+
+// ========== LIONS ANALYTICS ==========
+
+/**
+ * GET /api/analytics/lions
+ * Récupère tous les lions avec leurs métriques actuelles
+ */
+router.get('/lions', analyticsController.getLionsAnalytics);
+
+/**
+ * GET /api/analytics/lions/:lionId
+ * Récupère les détails analytiques d'un lion spécifique
+ */
+router.get('/lions/:lionId', analyticsController.getLionDetailsAnalytics);
+
+/**
+ * GET /api/analytics/lions/:lionId/weight-trend
+ * Récupère la tendance de poids d'un lion
+ */
+router.get('/lions/:lionId/weight-trend', analyticsController.getWeightTrend);
+
+/**
+ * GET /api/analytics/lions/:lionId/position-history
+ * Récupère l'historique des positions d'un lion
+ */
+router.get('/lions/:lionId/position-history', analyticsController.getPositionHistory);
+
+/**
+ * GET /api/analytics/lions/health-report
+ * Rapport de santé global des lions
+ */
+router.get('/lions-health/report', analyticsController.getLionsHealthReport);
+
+// ========== USERS ANALYTICS ==========
+
+/**
+ * GET /api/analytics/users/:userId/engagement
+ * Récupère le score d'engagement d'un utilisateur
+ */
+router.get(
+  '/users/:userId/engagement',
+  verifyToken,
+  analyticsController.getUserEngagementScore
+);
+
+/**
+ * GET /api/analytics/users/:userId/activity-summary
+ * Résumé d'activité utilisateur (30 derniers jours)
+ */
+router.get(
+  '/users/:userId/activity-summary',
+  verifyToken,
+  analyticsController.getUserActivitySummary
+);
+
+/**
+ * GET /api/analytics/users/:userId/challenges-analytics
+ * Analytiques précises sur les challenges
+ */
+router.get(
+  '/users/:userId/challenges-analytics',
+  verifyToken,
+  analyticsController.getChallengesAnalytics
+);
+
+// ========== GLOBAL ANALYTICS ==========
+
+/**
+ * GET /api/analytics/dashboard
+ * Dashboard global en 1 appel
+ */
+router.get('/dashboard', analyticsController.getDashboard);
+
+/**
+ * GET /api/analytics/system-health
+ * Santé générale du système
+ */
+router.get('/system-health', analyticsController.getSystemHealth);
+
+/**
+ * GET /api/analytics/data-quality
+ * Score de qualité des données
+ */
+router.get('/data-quality', analyticsController.getDataQualityMetrics);
+
+// ========== LEADERBOARDS ==========
+
+/**
+ * GET /api/analytics/leaderboard/users
+ * Classement des utilisateurs les plus engagés
+ */
+router.get('/leaderboard/users', analyticsController.getUsersLeaderboard);
+
+/**
+ * GET /api/analytics/leaderboard/lions
+ * Classement des lions par santé
+ */
+router.get('/leaderboard/lions', analyticsController.getLionsLeaderboard);
+
+// ========== TRENDS & PREDICTIONS ==========
+
+/**
+ * GET /api/analytics/trends/weight
+ * Tendances poids sur 30/60/90 jours
+ */
+router.get('/trends/weight', analyticsController.getWeightTrends);
+
+/**
+ * GET /api/analytics/trends/engagement
+ * Tendances d'engagement utilisateurs
+ */
+router.get('/trends/engagement', analyticsController.getEngagementTrends);
+
+// ========== EXPORT ==========
+
+/**
+ * GET /api/analytics/export/csv
+ * Export en CSV (lions, metrics, etc)
+ */
+router.get('/export/csv', analyticsController.exportAsCSV);
+
+/**
+ * GET /api/analytics/export/json
+ * Export en JSON
+ */
+router.get('/export/json', analyticsController.exportAsJSON);
+
+module.exports = router;

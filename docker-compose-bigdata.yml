@@ -1,0 +1,183 @@
+services:
+  # ========== ZOOKEEPER & KAFKA ==========
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - liontrack-net
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "19092:19092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_CLEANUP_POLICY: delete
+      KAFKA_LOG_RETENTION_HOURS: 72
+    networks:
+      - liontrack-net
+    healthcheck:
+      test: kafka-topics --bootstrap-server localhost:9092 --list
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== KAFKA SCHEMA REGISTRY ==========
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - liontrack-net
+
+  # ========== CONNECT (pour CDC optionnel) ==========
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: liontrack-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+    networks:
+      - liontrack-net
+
+  # ========== POSTGRESQL (Data Warehouse) ==========
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: liontrack_warehouse
+      POSTGRES_USER: liontrack
+      POSTGRES_PASSWORD: liontrack_secure_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./bigdata/sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - liontrack-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liontrack -d liontrack_warehouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== SPARK MASTER ==========
+  # Note: Spark est lancé localement via Python
+  # spark-master, spark-worker-1, spark-worker-2 à lancer séparément via:
+  # python bigdata/spark/batch_processor.py
+  # python bigdata/spark/streaming_processor.py
+
+  # ========== JUPYTER (pour exploration data) ==========
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      SPARK_MASTER: spark://spark-master:7077
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./bigdata/notebooks:/home/jovyan/work
+      - ./bigdata/data:/data
+    networks:
+      - liontrack-net
+    command: >
+      bash -c "pip install pyspark kafka-python pymongo pydantic &&
+      jupyter lab --ip=0.0.0.0 --allow-root --no-browser --NotebookApp.token=''"
+
+  # ========== PROMETHEUS (Monitoring) ==========
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./bigdata/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./bigdata/monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - liontrack-net
+
+  # ========== GRAFANA (Dashboards) ==========
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - liontrack-net
+    depends_on:
+      - prometheus
+
+  # ========== MINIO (S3-compatible storage) ==========
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - liontrack-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  liontrack-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  minio_data:

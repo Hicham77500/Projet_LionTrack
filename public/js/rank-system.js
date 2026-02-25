@@ -10,6 +10,20 @@ if (typeof ChallengeUI === 'undefined') {
         let chartInstance = null;
         const DEFAULT_AVATAR = 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
 
+        function getFocusableElements(container) {
+            if (!container) return [];
+            const selectors = [
+                'a[href]',
+                'button:not([disabled])',
+                'input:not([disabled])',
+                'textarea:not([disabled])',
+                'select:not([disabled])',
+                '[tabindex]:not([tabindex="-1"])'
+            ];
+            return Array.from(container.querySelectorAll(selectors.join(',')))
+                .filter(el => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
+        }
+
         // Helpers utilisateur / avatar
         function getStoredUser() {
             try {
@@ -21,6 +35,70 @@ if (typeof ChallengeUI === 'undefined') {
             } catch (e) {
                 return {};
             }
+        }
+
+        function setupModalAccessibility(modal, modalContent, titleEl, bodyEl, closeModal) {
+            if (!modal) return () => {};
+
+            if (modalContent) {
+                modalContent.setAttribute('role', 'dialog');
+                modalContent.setAttribute('aria-modal', 'true');
+            }
+
+            if (titleEl) {
+                const titleId = titleEl.id || `modal-title-${Date.now()}`;
+                titleEl.id = titleId;
+                if (modalContent) {
+                    modalContent.setAttribute('aria-labelledby', titleId);
+                }
+            }
+
+            if (bodyEl) {
+                const bodyId = bodyEl.id || `modal-body-${Date.now()}`;
+                bodyEl.id = bodyId;
+                if (modalContent) {
+                    modalContent.setAttribute('aria-describedby', bodyId);
+                }
+            }
+
+            const focusables = getFocusableElements(modalContent || modal);
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+
+            const onKeyDown = (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    if (typeof closeModal === 'function') {
+                        closeModal();
+                    }
+                    return;
+                }
+
+                if (event.key !== 'Tab') return;
+
+                if (!focusables.length) {
+                    event.preventDefault();
+                    return;
+                }
+
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            };
+
+            modal.addEventListener('keydown', onKeyDown);
+
+            if (first && typeof first.focus === 'function') {
+                setTimeout(() => first.focus(), 0);
+            }
+
+            return () => {
+                modal.removeEventListener('keydown', onKeyDown);
+            };
         }
 
         function getUserPhotoKey(user) {
@@ -65,19 +143,12 @@ if (typeof ChallengeUI === 'undefined') {
             const logoutBtn = document.getElementById('logout-btn');
             if (logoutBtn) {
                 logoutBtn.addEventListener('click', () => {
-                    if (window.AuthUI) {
-                        AuthUI.getToken(); // S'assurer que le module est initialisé
-                        const authModule = Object.values(window.AuthUI).find(
-                            val => typeof val === 'function' && val.toString().includes('localStorage.removeItem')
-                        );
-                        if (authModule) {
-                            authModule();
-                            return;
-                        }
+                    if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
+                        AuthUI.handleLogout();
+                    } else {
+                        localStorage.clear();
+                        window.location.reload();
                     }
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    window.location.reload();
                 });
             }
 
@@ -133,16 +204,19 @@ if (typeof ChallengeUI === 'undefined') {
                 
                 if (logoutItem) {
                     logoutItem.addEventListener('click', function() {
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('user');
-                        window.location.reload();
+                        if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
+                            AuthUI.handleLogout();
+                        } else {
+                            localStorage.clear();
+                            window.location.reload();
+                        }
                     });
                 }
             }
         }
 
         // Charger les défis de l'utilisateur
-        async function loadChallenges() {
+        async function loadChallenges(retryAttempted = false) {
             const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
             
             if (!token) {
@@ -156,6 +230,26 @@ if (typeof ChallengeUI === 'undefined') {
                 const res = await fetch('/challenges', {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
+                
+                // Si le token est invalide ou expiré (401), rediriger vers la connexion
+                if (res.status === 401) {
+                    if (!retryAttempted && window.AuthUI && typeof AuthUI.refreshAccessToken === 'function') {
+                        const refreshed = await AuthUI.refreshAccessToken();
+                        if (refreshed) {
+                            return loadChallenges(true);
+                        }
+                    }
+                    console.log('Token expiré ou invalide, redirection vers la connexion');
+                    if (window.AuthUI && typeof AuthUI.clearSession === 'function' && typeof AuthUI.showLoginUI === 'function') {
+                        AuthUI.clearSession();
+                        AuthUI.showLoginUI();
+                        AuthUI.showNotification('error', 'Votre session a expiré. Veuillez vous reconnecter.');
+                    } else {
+                        localStorage.clear();
+                        window.location.reload();
+                    }
+                    return;
+                }
                 
                 if (!res.ok) {
                     throw new Error("Erreur lors de la récupération des défis");
@@ -253,9 +347,10 @@ if (typeof ChallengeUI === 'undefined') {
                         <h3>LionTrack</h3>
                     </div>
                     <div class="navbar-links">
-                        <a href="#dashboard" class="navbar-link active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
+                        <a href="#dashboard" class="navbar-link"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
                         <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
-                        <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
+                        <a href="#forum" class="navbar-link"><i class="fas fa-comments"></i> Forum</a>
+                        <a href="#achievements" class="navbar-link rewards-link"><i class="fas fa-medal"></i> Récompenses</a>
                     </div>
                     <div class="navbar-profile">
                         <div class="profile-dropdown">
@@ -1113,6 +1208,8 @@ if (typeof ChallengeUI === 'undefined') {
             }
             
             const modal = document.createElement('div');
+            const previousFocus = document.activeElement;
+            const bodyOverflow = document.body.style.overflow;
             modal.className = 'modal';
             modal.innerHTML = `
                 <div class="modal-content">
@@ -1170,12 +1267,45 @@ if (typeof ChallengeUI === 'undefined') {
                     </div>
                 </div>
             `;
-            
+
+            let cleanupAccessibility = () => {};
+            const closeModal = () => {
+                cleanupAccessibility();
+                document.body.style.overflow = bodyOverflow;
+                if (modal.parentNode) {
+                    modal.parentNode.removeChild(modal);
+                }
+                if (previousFocus && typeof previousFocus.focus === 'function') {
+                    previousFocus.focus();
+                }
+            };
+
             document.body.appendChild(modal);
+
+            document.body.style.overflow = 'hidden';
+
+            const modalContent = modal.querySelector('.modal-content');
+            const modalTitle = modal.querySelector('.modal-header h3');
+            const modalBody = modal.querySelector('.modal-body');
+            cleanupAccessibility = setupModalAccessibility(
+                modal,
+                modalContent,
+                modalTitle,
+                modalBody,
+                closeModal
+            );
             
             const photoInput = modal.querySelector('#profile-photo-input');
             const changePhotoBtn = modal.querySelector('#change-photo-btn');
             const imagePreview = modal.querySelector('#profile-image-preview');
+
+            const closeBtn = modal.querySelector('.close-btn');
+            if (closeBtn) {
+                closeBtn.setAttribute('aria-label', 'Fermer la fenetre de profil');
+            }
+            if (changePhotoBtn) {
+                changePhotoBtn.setAttribute('aria-label', 'Changer la photo de profil');
+            }
             
             changePhotoBtn.addEventListener('click', () => {
                 photoInput.click();
@@ -1191,20 +1321,6 @@ if (typeof ChallengeUI === 'undefined') {
                 }
             });
             
-            const onKeyDown = (evt) => {
-                if (evt.key === 'Escape') {
-                    closeModal();
-                }
-            };
-
-            const closeModal = () => {
-                document.removeEventListener('keydown', onKeyDown);
-                if (modal.parentNode) {
-                    modal.parentNode.removeChild(modal);
-                }
-            };
-
-            document.addEventListener('keydown', onKeyDown);
             modal.addEventListener('click', (evt) => {
                 if (evt.target === modal) {
                     closeModal();
@@ -1239,6 +1355,8 @@ if (typeof ChallengeUI === 'undefined') {
         // Affiche la modal des paramètres
         function showSettingsModal() {
             const modal = document.createElement('div');
+            const previousFocus = document.activeElement;
+            const bodyOverflow = document.body.style.overflow;
             modal.className = 'modal';
             modal.innerHTML = `
                 <div class="modal-content">
@@ -1293,12 +1411,44 @@ if (typeof ChallengeUI === 'undefined') {
                 </div>
             `;
             
-            document.body.appendChild(modal);
-            
+            let cleanupAccessibility = () => {};
             const closeModal = () => {
-                document.body.removeChild(modal);
+                cleanupAccessibility();
+                document.body.style.overflow = bodyOverflow;
+                if (modal.parentNode) {
+                    modal.parentNode.removeChild(modal);
+                }
+                if (previousFocus && typeof previousFocus.focus === 'function') {
+                    previousFocus.focus();
+                }
             };
-            
+
+            document.body.appendChild(modal);
+
+            document.body.style.overflow = 'hidden';
+
+            const modalContent = modal.querySelector('.modal-content');
+            const modalTitle = modal.querySelector('.modal-header h3');
+            const modalBody = modal.querySelector('.modal-body');
+            cleanupAccessibility = setupModalAccessibility(
+                modal,
+                modalContent,
+                modalTitle,
+                modalBody,
+                closeModal
+            );
+
+            const closeBtn = modal.querySelector('.close-btn');
+            if (closeBtn) {
+                closeBtn.setAttribute('aria-label', 'Fermer la fenetre des parametres');
+            }
+
+            modal.addEventListener('click', (evt) => {
+                if (evt.target === modal) {
+                    closeModal();
+                }
+            });
+
             modal.querySelector('.close-btn').addEventListener('click', closeModal);
             modal.querySelector('#cancel-settings').addEventListener('click', closeModal);
             
@@ -1306,8 +1456,7 @@ if (typeof ChallengeUI === 'undefined') {
                 if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
                     AuthUI.handleLogout();
                 } else {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
+                    localStorage.clear();
                     window.location.reload();
                 }
                 closeModal();
@@ -1425,3 +1574,205 @@ document.addEventListener('DOMContentLoaded', () => {
         // Intégration possible avec chart-manager.js
     }
 });
+
+if (typeof window.RankSystem === 'undefined') {
+    const RankSystem = (function() {
+        const DEFAULT_RANK = {
+            name: 'Capitaine',
+            icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png'
+        };
+
+        const CREATOR_EMAILS = ['hicham.guendouz77500@gmail.com'];
+        const ADMIN_ROLES = [
+            {
+                id: 'mp-commandant',
+                title: 'MP - Commandant',
+                type: 'Administrateur',
+                icon: 'fas fa-crown',
+                description: 'Createur et administrateur de la plateforme'
+            },
+            {
+                id: 'chef-peloton',
+                title: 'Chef de Peloton',
+                type: 'Gestionnaire',
+                icon: 'fas fa-users',
+                description: 'Gestionnaire des defis et utilisateurs'
+            },
+            {
+                id: 'sergent-major',
+                title: 'Sergent-Major',
+                type: 'Moderateur',
+                icon: 'fas fa-gavel',
+                description: 'Moderateur de la communaute'
+            }
+        ];
+
+        const RANKS = [
+            { name: 'Recrue', minScore: 0, icon: DEFAULT_RANK.icon },
+            { name: 'Soldat', minScore: 200, icon: DEFAULT_RANK.icon },
+            { name: 'Caporal', minScore: 400, icon: DEFAULT_RANK.icon },
+            { name: 'Caporal-chef', minScore: 650, icon: DEFAULT_RANK.icon },
+            { name: 'Sergent', minScore: 900, icon: DEFAULT_RANK.icon },
+            { name: 'Sergent-chef', minScore: 1200, icon: DEFAULT_RANK.icon },
+            { name: 'Adjudant', minScore: 1550, icon: DEFAULT_RANK.icon },
+            { name: 'Adjudant-chef', minScore: 1900, icon: DEFAULT_RANK.icon },
+            { name: 'Lieutenant', minScore: 2300, icon: DEFAULT_RANK.icon },
+            { name: 'Capitaine', minScore: 2700, icon: DEFAULT_RANK.icon },
+            { name: 'Commandant', minScore: 3200, icon: DEFAULT_RANK.icon },
+            { name: 'Colonel', minScore: 3800, icon: DEFAULT_RANK.icon },
+            { name: 'General', minScore: 4500, icon: DEFAULT_RANK.icon }
+        ];
+
+        let cachedSummary = null;
+
+        function getStoredUser() {
+            try {
+                if (window.AuthUI && typeof AuthUI.getCurrentUser === 'function') {
+                    const user = AuthUI.getCurrentUser();
+                    if (user) return user;
+                }
+                return JSON.parse(localStorage.getItem('user') || '{}');
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function isCreator(user) {
+            if (!user) return false;
+            if (user.email && CREATOR_EMAILS.includes(user.email)) return true;
+            const roles = user.roles || [];
+            return roles.includes('admin') || roles.includes('creator') || roles.includes('owner');
+        }
+
+        function normalizeStats(stats) {
+            if (typeof stats === 'number') {
+                return {
+                    completedChallenges: stats,
+                    ratingAverage: 0,
+                    difficultyAverage: 0,
+                    speedAverage: 0,
+                    creativityAverage: 0
+                };
+            }
+
+            return {
+                completedChallenges: Number(stats?.completedChallenges) || 0,
+                ratingAverage: Number(stats?.ratingAverage) || 0,
+                difficultyAverage: Number(stats?.difficultyAverage) || 0,
+                speedAverage: Number(stats?.speedAverage) || 0,
+                creativityAverage: Number(stats?.creativityAverage) || 0
+            };
+        }
+
+        function calculateScore(stats) {
+            const normalized = normalizeStats(stats);
+            const completedScore = normalized.completedChallenges * 120;
+            const ratingScore = Math.round(Math.min(Math.max(normalized.ratingAverage, 0), 5) * 80);
+            return Math.max(0, completedScore + ratingScore);
+        }
+
+        function getRankForScore(score) {
+            const ordered = [...RANKS].sort((a, b) => a.minScore - b.minScore);
+            return ordered.reduce((current, rank) => (score >= rank.minScore ? rank : current), ordered[0]);
+        }
+
+        function getNextRank(currentRank) {
+            const ordered = [...RANKS].sort((a, b) => a.minScore - b.minScore);
+            const index = ordered.findIndex(rank => rank.name === currentRank.name);
+            if (index === -1 || index === ordered.length - 1) return null;
+            return ordered[index + 1];
+        }
+
+        function getRankProgress(score, currentRank) {
+            const nextRank = getNextRank(currentRank);
+            if (!nextRank) return 100;
+            const span = nextRank.minScore - currentRank.minScore;
+            if (span <= 0) return 100;
+            return Math.min(100, Math.max(0, ((score - currentRank.minScore) / span) * 100));
+        }
+
+        function getScoreSummary(stats) {
+            const normalized = normalizeStats(stats);
+            const score = calculateScore(normalized);
+            const currentUser = getStoredUser();
+
+            const rank = getRankForScore(score) || DEFAULT_RANK;
+            const nextRank = getNextRank(rank);
+            const progress = getRankProgress(score, rank);
+
+            if (isCreator(currentUser)) {
+                const summary = {
+                    ...normalized,
+                    score,
+                    rank,
+                    nextRank,
+                    progress,
+                    isSpecial: true,
+                    adminRole: ADMIN_ROLES[0]
+                };
+                cachedSummary = summary;
+                return summary;
+            }
+
+            const summary = {
+                ...normalized,
+                score,
+                rank,
+                nextRank,
+                progress,
+                isSpecial: false,
+                adminRole: null
+            };
+            cachedSummary = summary;
+            return summary;
+        }
+
+        function applyRankToNavbar(rank) {
+            const rankContainers = document.querySelectorAll('.profile-rank');
+            rankContainers.forEach(container => {
+                const icon = container.querySelector('img');
+                const label = container.querySelector('span');
+
+                if (icon) icon.src = rank.icon;
+                if (label) label.textContent = rank.name;
+            });
+        }
+
+        function updateRankDisplay(stats) {
+            const summary = getScoreSummary(stats || cachedSummary || 0);
+            applyRankToNavbar(summary.rank);
+            return summary;
+        }
+
+        function getCurrentRank(stats) {
+            if (stats) {
+                return getScoreSummary(stats).rank;
+            }
+
+            if (cachedSummary) {
+                return cachedSummary.rank;
+            }
+
+            return DEFAULT_RANK;
+        }
+
+        function getRanks() {
+            return [...RANKS];
+        }
+
+        function getAdminRoles() {
+            return [...ADMIN_ROLES];
+        }
+
+        return {
+            updateRankDisplay,
+            getCurrentRank,
+            getRanks,
+            getAdminRoles,
+            getScoreSummary,
+            calculateScore
+        };
+    })();
+
+    window.RankSystem = RankSystem;
+}

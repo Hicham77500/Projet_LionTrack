@@ -8,8 +8,30 @@ const ChallengeUI = (function() {
     let challenges = [];
     let chartInstance = null;
     const DEFAULT_AVATAR = 'https://cdn.icon-icons.com/icons2/1378/PNG/512/avatardefault_92824.png';
+    let activeView = 'dashboard';
+    const challengesViewState = {
+        search: '',
+        status: 'all',
+        sort: 'recent',
+        view: 'grid'
+    };
 
     // Helpers utilisateur / stockage par utilisateur
+
+    function getFocusableElements(container) {
+        if (!container) return [];
+        const selectors = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'textarea:not([disabled])',
+            'select:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])'
+        ];
+        return Array.from(container.querySelectorAll(selectors.join(',')))
+            .filter(el => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
+    }
+
     function getStoredUser() {
         try {
             if (window.AuthUI && typeof AuthUI.getCurrentUser === 'function') {
@@ -20,6 +42,70 @@ const ChallengeUI = (function() {
         } catch (e) {
             return {};
         }
+    }
+
+    function setupModalAccessibility(modal, modalContent, titleEl, bodyEl, closeModal) {
+        if (!modal) return () => {};
+
+        if (modalContent) {
+            modalContent.setAttribute('role', 'dialog');
+            modalContent.setAttribute('aria-modal', 'true');
+        }
+
+        if (titleEl) {
+            const titleId = titleEl.id || `modal-title-${Date.now()}`;
+            titleEl.id = titleId;
+            if (modalContent) {
+                modalContent.setAttribute('aria-labelledby', titleId);
+            }
+        }
+
+        if (bodyEl) {
+            const bodyId = bodyEl.id || `modal-body-${Date.now()}`;
+            bodyEl.id = bodyId;
+            if (modalContent) {
+                modalContent.setAttribute('aria-describedby', bodyId);
+            }
+        }
+
+        const focusables = getFocusableElements(modalContent || modal);
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                if (typeof closeModal === 'function') {
+                    closeModal();
+                }
+                return;
+            }
+
+            if (event.key !== 'Tab') return;
+
+            if (!focusables.length) {
+                event.preventDefault();
+                return;
+            }
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+
+        modal.addEventListener('keydown', onKeyDown);
+
+        if (first && typeof first.focus === 'function') {
+            setTimeout(() => first.focus(), 0);
+        }
+
+        return () => {
+            modal.removeEventListener('keydown', onKeyDown);
+        };
     }
 
     function getUserKey(user, suffix) {
@@ -45,6 +131,53 @@ const ChallengeUI = (function() {
     function setUserBio(user, bio) {
         const key = getUserKey(user, 'userBio');
         localStorage.setItem(key, bio);
+    }
+
+    function getRatingsKey(user) {
+        return getUserKey(user, 'challengeRatings');
+    }
+
+    function getChallengeRatings(user) {
+        const key = getRatingsKey(user);
+        try {
+            return JSON.parse(localStorage.getItem(key) || '{}');
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function setChallengeRatings(user, ratings) {
+        const key = getRatingsKey(user);
+        localStorage.setItem(key, JSON.stringify(ratings));
+    }
+
+    function getDefaultRating() {
+        return { difficulty: 3, speed: 3, creativity: 3 };
+    }
+
+    function getChallengeRating(ratings, challengeId) {
+        const stored = ratings[challengeId];
+        if (!stored) return getDefaultRating();
+        return {
+            difficulty: Number(stored.difficulty) || 3,
+            speed: Number(stored.speed) || 3,
+            creativity: Number(stored.creativity) || 3
+        };
+    }
+
+    function formatDate(value) {
+        if (!value) return null;
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        return date.toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+    }
+
+    function getChallengeStatus(progress) {
+        return progress === 100 ? 'completed' : 'active';
     }
 
     // Fonction d'initialisation
@@ -81,6 +214,12 @@ const ChallengeUI = (function() {
                 console.log("Bouton Créer un défi cliqué");
                 createChallenge();
             }
+
+            const goChallengesBtn = event.target.closest('#go-challenges-btn');
+            if (goChallengesBtn) {
+                showChallengesTab();
+                loadChallenges();
+            }
         });
 
         // Bouton pour actualiser la liste des défis
@@ -93,23 +232,14 @@ const ChallengeUI = (function() {
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => {
-                // Si AuthUI est disponible, utiliser sa fonction de déconnexion
-                if (window.AuthUI) {
-                    AuthUI.getToken(); // S'assurer que le module est initialisé
-                    // Trouver la fonction handleLogout dans le module AuthUI
-                    const authModule = Object.values(window.AuthUI).find(
-                        val => typeof val === 'function' && val.toString().includes('localStorage.removeItem')
-                    );
-                    if (authModule) {
-                        authModule();
-                        return;
-                    }
+                // Utiliser la fonction de déconnexion d'AuthUI
+                if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
+                    AuthUI.handleLogout();
+                } else {
+                    // Fallback: nettoyer manuellement
+                    localStorage.clear();
+                    window.location.reload();
                 }
-                
-                // Sinon, implémenter une déconnexion basique
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                window.location.reload();
             });
         }
 
@@ -119,75 +249,136 @@ const ChallengeUI = (function() {
 
     // Fonction dédiée pour configurer le menu profil (peut être rappelée)
     function setupProfileMenu() {
-        const profileContainer = document.querySelector('.profile-container');
-        const dropdownMenu = document.querySelector('.dropdown-menu');
+        // Nettoyer les anciens listeners en utilisant le clonage simple
+        const profileDropdown = document.querySelector('.profile-dropdown');
+        if (!profileDropdown) return;
         
-        if (profileContainer && dropdownMenu) {
-            let timeoutId; // Variable pour stocker l'ID du timeout
-            
-            // Ouvrir le menu au survol
-            profileContainer.addEventListener('mouseenter', function() {
-                // Annuler tout timeout de fermeture en cours
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
-                }
-                dropdownMenu.classList.add('active');
+        // Vérifier que tous les éléments requis existent
+        const profileContainer = profileDropdown.querySelector('.profile-container');
+        const dropdownMenu = profileDropdown.querySelector('.dropdown-menu');
+        
+        if (!profileContainer || !dropdownMenu) return;
+        
+        let timeoutId;
+        
+        // Ouvrir le menu au survol de la photo/info
+        profileContainer.addEventListener('mouseenter', function() {
+            if (timeoutId) clearTimeout(timeoutId);
+            dropdownMenu.classList.add('active');
+        });
+        
+        // Garder le menu ouvert lors du survol du menu
+        dropdownMenu.addEventListener('mouseenter', function() {
+            if (timeoutId) clearTimeout(timeoutId);
+        });
+        
+        // Fermer le menu au départ de la souris
+        profileDropdown.addEventListener('mouseleave', function() {
+            timeoutId = setTimeout(() => {
+                dropdownMenu.classList.remove('active');
+            }, 200);
+        });
+        
+        // Gérer les clics sur les éléments du menu
+        const profileItem = dropdownMenu.querySelector('.profile-item');
+        const settingsItem = dropdownMenu.querySelector('.settings-item');
+        const logoutItem = dropdownMenu.querySelector('.logout');
+        
+        if (profileItem) {
+            profileItem.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropdownMenu.classList.remove('active');
+                setTimeout(() => showProfileModal(), 100);
             });
-            
-            // Gardez également le menu ouvert lorsque la souris est sur le menu
-            dropdownMenu.addEventListener('mouseenter', function() {
-                // Annuler tout timeout de fermeture en cours
-                if (timeoutId) {
-                    clearTimeout(timeoutId);
-                    timeoutId = null;
+        }
+        
+        if (settingsItem) {
+            settingsItem.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropdownMenu.classList.remove('active');
+                setTimeout(() => showSettingsModal(), 100);
+            });
+        }
+        
+        if (logoutItem) {
+            logoutItem.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
+                    AuthUI.handleLogout();
                 }
             });
-            
-            // Fermer le menu quand on quitte la zone, mais avec un délai
-            const profileDropdown = document.querySelector('.profile-dropdown');
-            if (profileDropdown) {
-                profileDropdown.addEventListener('mouseleave', function() {
-                    // Définir un délai avant de fermer le menu (800ms)
-                    timeoutId = setTimeout(() => {
-                        dropdownMenu.classList.remove('active');
-                    }, 800); // Délai de 800ms
-                });
-            }
-            
-            // Gérer les clics sur les éléments du menu
-            const profileItem = dropdownMenu.querySelector('.profile-item');
-            const settingsItem = dropdownMenu.querySelector('.settings-item');
-            const logoutItem = dropdownMenu.querySelector('.logout');
-            
-            if (profileItem) {
-                profileItem.addEventListener('click', function() {
-                    dropdownMenu.classList.remove('active');
-                    showProfileModal();
-                });
-            }
-            
-            if (settingsItem) {
-                settingsItem.addEventListener('click', function() {
-                    dropdownMenu.classList.remove('active');
-                    showSettingsModal();
-                });
-            }
-            
-            if (logoutItem) {
-                logoutItem.addEventListener('click', function() {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    window.location.reload();
-                });
-            }
         }
     }
 
     // Les autres boutons dynamiques sont ajoutés lors de la création des cartes
 
+    // Fonction générique pour créer la navbar
+    function buildNavbar(activeLink = '#dashboard') {
+        const currentUser = getStoredUser();
+        const profilePhoto = getProfilePhoto(currentUser);
+        const rewardStats = computeRewardStats();
+        const getActiveClass = (href) => (href === activeLink ? ' active' : '');
+        const rankSummary = window.RankSystem
+            ? RankSystem.getScoreSummary(rewardStats)
+            : {
+                rank: { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' }
+            };
+
+        return `
+        <div class="navbar">
+            <div class="navbar-logo">
+                <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="LionTrack">
+                <h3>LionTrack</h3>
+            </div>
+            
+            <div class="navbar-links">
+                <a href="#dashboard" class="navbar-link${getActiveClass('#dashboard')}"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
+                <a href="#challenges" class="navbar-link${getActiveClass('#challenges')}"><i class="fas fa-trophy"></i> Mes défis</a>
+                <a href="#physique" class="navbar-link${getActiveClass('#physique')}"><i class="fas fa-dumbbell"></i> Physique</a>
+                <a href="#forum" class="navbar-link${getActiveClass('#forum')}"><i class="fas fa-comments"></i> Forum</a>
+                <a href="#achievements" class="navbar-link rewards-link${getActiveClass('#achievements')}"><i class="fas fa-medal"></i> Récompenses</a>
+            </div>
+            
+            <div class="navbar-profile">
+                <div class="profile-dropdown">
+                    <div class="profile-container">
+                        <div class="profile-image">
+                            <img src="${profilePhoto}" alt="Photo de profil">
+                        </div>
+                        <div class="profile-info">
+                            <span class="profile-name" id="user-display"></span>
+                            <div class="profile-rank">
+                                <img src="${rankSummary.rank.icon}" class="rank-insignia" alt="Grade">
+                                <span>${rankSummary.rank.name}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dropdown-menu">
+                        <div class="dropdown-item profile-item">
+                            <i class="fas fa-user-circle"></i>
+                            <span>Mon profil</span>
+                        </div>
+                        <div class="dropdown-item settings-item">
+                            <i class="fas fa-cog"></i>
+                            <span>Paramètres</span>
+                        </div>
+                        <div class="dropdown-item logout">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Déconnexion</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    }
+
     // Charger les défis de l'utilisateur
-    async function loadChallenges() {
+    async function loadChallenges(retryAttempted = false) {
         const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
         if (!token) {
             console.log("Aucun token trouvé, impossible de charger les défis");
@@ -206,6 +397,26 @@ const ChallengeUI = (function() {
             });
             
             console.log("Statut de la réponse:", response.status);
+            
+            // Si le token est invalide ou expiré (401), rediriger vers la connexion
+            if (response.status === 401) {
+                if (!retryAttempted && window.AuthUI && typeof AuthUI.refreshAccessToken === 'function') {
+                    const refreshed = await AuthUI.refreshAccessToken();
+                    if (refreshed) {
+                        return loadChallenges(true);
+                    }
+                }
+                console.log('Token expiré ou invalide, redirection vers la connexion');
+                if (window.AuthUI && typeof AuthUI.clearSession === 'function' && typeof AuthUI.showLoginUI === 'function') {
+                    AuthUI.clearSession();
+                    AuthUI.showLoginUI();
+                    AuthUI.showNotification('error', 'Votre session a expiré. Veuillez vous reconnecter.');
+                } else {
+                    localStorage.clear();
+                    window.location.reload();
+                }
+                return;
+            }
             
             if (!response.ok) {
                 let errorData;
@@ -269,16 +480,80 @@ const ChallengeUI = (function() {
         }
     }
 
+    function getFilteredChallenges() {
+        const searchTerm = challengesViewState.search.trim().toLowerCase();
+        const statusFilter = challengesViewState.status;
+
+        let filtered = challenges.filter(challenge => {
+            const title = (challenge.title || '').toLowerCase();
+            const description = (challenge.description || '').toLowerCase();
+            const matchesSearch = !searchTerm || title.includes(searchTerm) || description.includes(searchTerm);
+
+            const progress = challenge.progress || 0;
+            const status = getChallengeStatus(progress);
+            const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+            return matchesSearch && matchesStatus;
+        });
+
+        const sortMode = challengesViewState.sort;
+        filtered = filtered.slice().sort((a, b) => {
+            const aProgress = a.progress || 0;
+            const bProgress = b.progress || 0;
+
+            if (sortMode === 'progress-desc') return bProgress - aProgress;
+            if (sortMode === 'progress-asc') return aProgress - bProgress;
+            if (sortMode === 'title-asc') return (a.title || '').localeCompare(b.title || '');
+            if (sortMode === 'title-desc') return (b.title || '').localeCompare(a.title || '');
+
+            const aDate = new Date(a.startDate || a.createdAt || 0).getTime();
+            const bDate = new Date(b.startDate || b.createdAt || 0).getTime();
+            return bDate - aDate;
+        });
+
+        return filtered;
+    }
+
+    function applyChallengeListView() {
+        const challengeList = document.getElementById('challenge-list');
+        if (!challengeList) return;
+
+        const isList = challengesViewState.view === 'list';
+        challengeList.classList.toggle('is-list', isList);
+        challengeList.classList.toggle('is-grid', !isList);
+    }
+
+    function updateChallengeCount(filteredCount, totalCount) {
+        const countEl = document.getElementById('challenge-count');
+        if (!countEl) return;
+
+        if (filteredCount === totalCount) {
+            countEl.textContent = `${filteredCount} défi${filteredCount > 1 ? 's' : ''}`;
+        } else {
+            countEl.textContent = `${filteredCount} / ${totalCount} défis`;
+        }
+    }
+
     // Affiche les défis dans l'interface
     function renderChallenges() {
         const challengeList = document.getElementById('challenge-list');
         if (!challengeList) {
-            createChallengeSection();
-            return;
+            if (activeView === 'challenges') {
+                buildChallengesView();
+            } else if (activeView === 'dashboard') {
+                createChallengeSection();
+            } else {
+                return;
+            }
+            const retryList = document.getElementById('challenge-list');
+            if (!retryList) return;
+            return renderChallenges();
         }
         
         challengeList.innerHTML = '';
-        
+
+        applyChallengeListView();
+
         if (challenges.length === 0) {
             challengeList.innerHTML = `
                 <div class="empty-state">
@@ -287,10 +562,25 @@ const ChallengeUI = (function() {
                     <p>Créez votre premier défi pour commencer votre parcours de lion.</p>
                 </div>
             `;
+            updateChallengeCount(0, 0);
             return;
         }
-        
-        challenges.forEach(challenge => {
+
+        const filteredChallenges = getFilteredChallenges();
+        updateChallengeCount(filteredChallenges.length, challenges.length);
+
+        if (filteredChallenges.length === 0) {
+            challengeList.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-search fa-3x"></i>
+                    <h3>Aucun résultat</h3>
+                    <p>Ajustez vos filtres pour retrouver vos défis.</p>
+                </div>
+            `;
+            return;
+        }
+
+        filteredChallenges.forEach(challenge => {
             const challengeCard = createChallengeCard(challenge);
             challengeList.appendChild(challengeCard);
         });
@@ -301,56 +591,8 @@ const ChallengeUI = (function() {
 function createChallengeSection() {
     const challengeSection = document.getElementById('challenge-section');
     if (!challengeSection) return;
-    
-    const currentUser = getStoredUser();
-    const profilePhoto = getProfilePhoto(currentUser);
 
-    const content = `
-        <div class="navbar">
-            <div class="navbar-logo">
-                <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="LionTrack">
-                <h3>LionTrack</h3>
-            </div>
-            
-            <div class="navbar-links">
-                <a href="#dashboard" class="navbar-link active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
-                <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
-                <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
-                <a href="#physique" class="navbar-link"><i class="fas fa-dumbbell"></i> Physique</a>
-            </div>
-            
-            <div class="navbar-profile">
-                <div class="profile-dropdown">
-                    <div class="profile-container">
-                        <div class="profile-image">
-                            <img src="${profilePhoto}" alt="Photo de profil">
-                        </div>
-                        <div class="profile-info">
-                            <span class="profile-name" id="user-display"></span>
-                            <div class="profile-rank">
-                                <img src="https://cdn-icons-png.flaticon.com/512/9241/9241203.png" class="rank-insignia" alt="Grade">
-                                <span>Capitaine</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="dropdown-menu">
-                        <div class="dropdown-item profile-item">
-                            <i class="fas fa-user-circle"></i>
-                            <span>Mon profil</span>
-                        </div>
-                        <div class="dropdown-item settings-item">
-                            <i class="fas fa-cog"></i>
-                            <span>Paramètres</span>
-                        </div>
-                        <div class="dropdown-item logout">
-                            <i class="fas fa-sign-out-alt"></i>
-                            <span>Déconnexion</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    const content = buildNavbar('#dashboard') + `
 
         <div class="stats-grid">
             <div class="stat-card">
@@ -377,21 +619,20 @@ function createChallengeSection() {
         </div>
         
         <div class="challenge-actions">
-            <h3><i class="fas fa-tasks"></i> Mes Défis</h3>
+            <h3><i class="fas fa-bolt"></i> Actions rapides</h3>
             <div>
-                <button id="reload-challenges-btn" class="icon-btn" title="Actualiser">
-                    <i class="fas fa-sync-alt"></i>
+                <button id="go-challenges-btn" class="primary-btn">
+                    <i class="fas fa-trophy"></i> Gérer mes défis
                 </button>
-                <button id="create-challenge-btn" class="primary-btn">
-                    <i class="fas fa-plus"></i> Créer un Défi
-                </button>
+                <a href="#achievements" class="ghost-btn">
+                    <i class="fas fa-medal"></i> Voir récompenses
+                </a>
             </div>
         </div>
-        
-        <div id="challenge-list" class="challenge-grid"></div>
     `;
     
     challengeSection.innerHTML = content;
+    setActiveNavLink('#dashboard');
     
     // Réattacher tous les écouteurs d'événements
     setupEventListeners();
@@ -411,6 +652,185 @@ function createChallengeSection() {
     }
 }
 
+    function buildChallengesView() {
+        const challengeSection = document.getElementById('challenge-section');
+        if (!challengeSection) return;
+
+        const content = buildNavbar('#challenges') + `
+
+            <div class="page-header challenges-header">
+                <div class="page-title">
+                    <span class="eyebrow">Espace perso</span>
+                    <h2>Mes défis</h2>
+                    <p class="page-subtitle">Gérez vos objectifs, priorisez vos efforts et gardez le cap.</p>
+                </div>
+                <div class="header-actions">
+                    <button id="create-challenge-btn" class="primary-btn">
+                        <i class="fas fa-plus"></i> Nouveau défi
+                    </button>
+                    <button id="reload-challenges-btn" class="icon-btn" title="Actualiser">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="challenge-summary">
+                <div class="summary-card">
+                    <span class="summary-label">Total</span>
+                    <span class="summary-value" id="stat-total">0</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Actifs</span>
+                    <span class="summary-value" id="stat-active">0</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-label">Complétés</span>
+                    <span class="summary-value" id="stat-completed">0</span>
+                </div>
+                <div class="summary-progress-card">
+                    <div class="summary-progress-header">
+                        <span class="summary-label">Progression moyenne</span>
+                        <span class="summary-value" id="summary-progress-value">0%</span>
+                    </div>
+                    <div class="summary-progress-bar">
+                        <div class="summary-progress-fill" id="summary-progress-bar"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="challenge-toolbar">
+                <div class="toolbar-group">
+                    <div class="input-with-icon">
+                        <i class="fas fa-search"></i>
+                        <input id="challenge-search" type="text" placeholder="Rechercher un défi">
+                    </div>
+                    <select id="challenge-status-filter">
+                        <option value="all">Tous les défis</option>
+                        <option value="active">Actifs</option>
+                        <option value="completed">Completes</option>
+                    </select>
+                </div>
+                <div class="toolbar-group">
+                    <select id="challenge-sort">
+                        <option value="recent">Les plus recents</option>
+                        <option value="progress-desc">Progression (desc)</option>
+                        <option value="progress-asc">Progression (asc)</option>
+                        <option value="title-asc">Titre (A-Z)</option>
+                        <option value="title-desc">Titre (Z-A)</option>
+                    </select>
+                    <div class="view-toggle">
+                        <button type="button" class="view-btn" data-view="grid" title="Vue grille">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button type="button" class="view-btn" data-view="list" title="Vue liste">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                    <button id="challenge-clear-filters" class="ghost-btn" type="button">
+                        Réinitialiser
+                    </button>
+                </div>
+            </div>
+
+            <div class="challenge-list-info">
+                <span id="challenge-count">0 défis</span>
+                <span class="challenge-hint"><i class="fas fa-lightbulb"></i> Astuce: triez par progression pour attaquer les défis en retard.</span>
+            </div>
+
+            <div id="challenge-list" class="challenge-grid is-grid"></div>
+        `;
+
+        challengeSection.innerHTML = content;
+        setActiveNavLink('#challenges');
+
+        if (window.AuthUI && AuthUI.getCurrentUser()) {
+            const userDisplay = document.getElementById('user-display');
+            if (userDisplay) {
+                const currentUser = AuthUI.getCurrentUser();
+                userDisplay.textContent = currentUser.username || currentUser.email;
+            }
+        }
+
+        if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
+            AuthUI.setupEventListeners();
+        }
+
+        setupProfileMenu();
+        setupEventListeners();
+        setupChallengesToolbar();
+        applyChallengeListView();
+    }
+
+    function setupChallengesToolbar() {
+        const searchInput = document.getElementById('challenge-search');
+        if (searchInput) {
+            searchInput.value = challengesViewState.search;
+            searchInput.addEventListener('input', (event) => {
+                challengesViewState.search = event.target.value;
+                renderChallenges();
+            });
+        }
+
+        const statusFilter = document.getElementById('challenge-status-filter');
+        if (statusFilter) {
+            statusFilter.value = challengesViewState.status;
+            statusFilter.addEventListener('change', (event) => {
+                challengesViewState.status = event.target.value;
+                renderChallenges();
+            });
+        }
+
+        const sortSelect = document.getElementById('challenge-sort');
+        if (sortSelect) {
+            sortSelect.value = challengesViewState.sort;
+            sortSelect.addEventListener('change', (event) => {
+                challengesViewState.sort = event.target.value;
+                renderChallenges();
+            });
+        }
+
+        const viewButtons = document.querySelectorAll('.view-btn');
+        if (viewButtons.length) {
+            viewButtons.forEach(button => {
+                const mode = button.getAttribute('data-view');
+                if (mode === challengesViewState.view) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+
+                button.addEventListener('click', () => {
+                    challengesViewState.view = mode;
+                    viewButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    applyChallengeListView();
+                });
+            });
+        }
+
+        const clearFiltersBtn = document.getElementById('challenge-clear-filters');
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', () => {
+                challengesViewState.search = '';
+                challengesViewState.status = 'all';
+                challengesViewState.sort = 'recent';
+                challengesViewState.view = 'grid';
+
+                if (searchInput) searchInput.value = '';
+                if (statusFilter) statusFilter.value = 'all';
+                if (sortSelect) sortSelect.value = 'recent';
+
+                const viewButtonsReset = document.querySelectorAll('.view-btn');
+                viewButtonsReset.forEach(btn => btn.classList.remove('active'));
+                const gridButton = document.querySelector('.view-btn[data-view="grid"]');
+                if (gridButton) gridButton.classList.add('active');
+
+                applyChallengeListView();
+                renderChallenges();
+            });
+        }
+    }
+
     // Crée une carte pour un défi
     function createChallengeCard(challenge) {
         const card = document.createElement('div');
@@ -421,37 +841,65 @@ function createChallengeSection() {
         let progressClass = 'progress-low';
         if (progress >= 70) progressClass = 'progress-high';
         else if (progress >= 30) progressClass = 'progress-medium';
+
+        const status = getChallengeStatus(progress);
+        const statusLabel = status === 'completed' ? 'Complété' : 'En cours';
+        const statusClass = status === 'completed' ? 'status-completed' : 'status-active';
+        const startDate = formatDate(challenge.startDate || challenge.createdAt);
+        const endDate = formatDate(challenge.endDate);
+        const dateLabel = startDate || 'Date non définie';
+        const endLabel = endDate || 'Sans date cible';
+
+        const currentUser = getStoredUser();
+        const ratings = getChallengeRatings(currentUser);
+        const storedRating = ratings[challenge._id];
+        const rating = getChallengeRating(ratings, challenge._id);
+        const ratingAverage = ((rating.difficulty + rating.speed + rating.creativity) / 3).toFixed(1);
+        const ratingLabel = storedRating ? `${ratingAverage}/5` : 'Non evalue';
         
         card.innerHTML = `
-            <div class="challenge-header">
-                <h4 class="challenge-title">${challenge.title}</h4>
-                <div class="challenge-actions">
-                    <button class="icon-btn edit-btn" title="Modifier">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="icon-btn delete-btn" title="Supprimer">
-                        <i class="fas fa-trash-alt"></i>
+            <div class="challenge-main">
+                <div class="challenge-header">
+                    <div class="challenge-title-group">
+                        <h4 class="challenge-title">${challenge.title}</h4>
+                        <span class="challenge-pill ${statusClass}">${statusLabel}</span>
+                    </div>
+                    <div class="challenge-card-actions">
+                        <button class="icon-btn rate-btn" title="Evaluer">
+                            <i class="fas fa-star"></i>
+                        </button>
+                        <button class="icon-btn edit-btn" title="Modifier">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="icon-btn delete-btn" title="Supprimer">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="challenge-description">${challenge.description || 'Pas de description'}</p>
+                <div class="progress-container">
+                    <div class="progress-bar ${progressClass}" style="width: ${progress}%"></div>
+                </div>
+                <div class="progress-info">
+                    <span class="progress-label">Progression: ${progress}%</span>
+                    <button class="update-progress-btn">
+                        <i class="fas fa-chart-line"></i> Mettre à jour
                     </button>
                 </div>
             </div>
-            <p class="challenge-description">${challenge.description || 'Pas de description'}</p>
-            <div class="progress-container">
-                <div class="progress-bar ${progressClass}" style="width: ${progress}%"></div>
-            </div>
-            <div class="progress-info">
-                <span class="progress-label">Progression: ${progress}%</span>
-                <button class="update-progress-btn">
-                    <i class="fas fa-chart-line"></i> Mettre à jour
-                </button>
-            </div>
-            <div class="challenge-footer">
-                <span class="challenge-date">
-                    <i class="fas fa-calendar-alt"></i> 
-                    ${new Date(challenge.startDate || Date.now()).toLocaleDateString()}
-                </span>
-                <span class="challenge-status">
-                    ${progress === 100 ? '<i class="fas fa-trophy"></i> Complété' : '<i class="fas fa-hourglass-half"></i> En cours'}
-                </span>
+            <div class="challenge-meta">
+                <div class="challenge-meta-row">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>${dateLabel}</span>
+                </div>
+                <div class="challenge-meta-row">
+                    <i class="fas fa-flag-checkered"></i>
+                    <span>${endLabel}</span>
+                </div>
+                <div class="challenge-meta-row">
+                    <i class="fas fa-star"></i>
+                    <span class="challenge-rating-value">${ratingLabel}</span>
+                </div>
             </div>
         `;
         
@@ -469,13 +917,356 @@ function createChallengeSection() {
         if (updateProgressBtn) {
             updateProgressBtn.addEventListener('click', () => updateChallengeProgress(challenge._id, progress));
         }
+
+        const rateBtn = card.querySelector('.rate-btn');
+        if (rateBtn) {
+            rateBtn.addEventListener('click', () => openChallengeRatingModal(challenge, card));
+        }
         
         return card;
     }
 
+    function openChallengeRatingModal(challenge, card) {
+        const existingModals = document.querySelectorAll('.modal');
+        existingModals.forEach(modal => {
+            document.body.removeChild(modal);
+        });
+
+        const currentUser = getStoredUser();
+        const ratings = getChallengeRatings(currentUser);
+        const rating = getChallengeRating(ratings, challenge._id);
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-star"></i> Evaluation du defi</h3>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Difficulte: <span id="rating-difficulty-value">${rating.difficulty}</span></label>
+                        <input type="range" id="rating-difficulty" class="slider" min="1" max="5" step="1" value="${rating.difficulty}">
+                    </div>
+                    <div class="form-group">
+                        <label>Rapidite: <span id="rating-speed-value">${rating.speed}</span></label>
+                        <input type="range" id="rating-speed" class="slider" min="1" max="5" step="1" value="${rating.speed}">
+                    </div>
+                    <div class="form-group">
+                        <label>Creativite: <span id="rating-creativity-value">${rating.creativity}</span></label>
+                        <input type="range" id="rating-creativity" class="slider" min="1" max="5" step="1" value="${rating.creativity}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancel-rating" class="secondary-btn">Annuler</button>
+                    <button id="save-rating" class="primary-btn">Enregistrer</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const closeModal = () => {
+            if (modal.parentNode) modal.parentNode.removeChild(modal);
+        };
+
+        modal.querySelector('.close-btn').addEventListener('click', closeModal);
+        modal.querySelector('#cancel-rating').addEventListener('click', closeModal);
+
+        const difficultySlider = modal.querySelector('#rating-difficulty');
+        const speedSlider = modal.querySelector('#rating-speed');
+        const creativitySlider = modal.querySelector('#rating-creativity');
+
+        const difficultyValue = modal.querySelector('#rating-difficulty-value');
+        const speedValue = modal.querySelector('#rating-speed-value');
+        const creativityValue = modal.querySelector('#rating-creativity-value');
+
+        if (difficultySlider && difficultyValue) {
+            difficultySlider.addEventListener('input', () => {
+                difficultyValue.textContent = difficultySlider.value;
+            });
+        }
+
+        if (speedSlider && speedValue) {
+            speedSlider.addEventListener('input', () => {
+                speedValue.textContent = speedSlider.value;
+            });
+        }
+
+        if (creativitySlider && creativityValue) {
+            creativitySlider.addEventListener('input', () => {
+                creativityValue.textContent = creativitySlider.value;
+            });
+        }
+
+        modal.querySelector('#save-rating').addEventListener('click', () => {
+            const updated = {
+                difficulty: Number(difficultySlider.value),
+                speed: Number(speedSlider.value),
+                creativity: Number(creativitySlider.value)
+            };
+
+            ratings[challenge._id] = updated;
+            setChallengeRatings(currentUser, ratings);
+
+            if (card) {
+                const average = ((updated.difficulty + updated.speed + updated.creativity) / 3).toFixed(1);
+                const label = card.querySelector('.challenge-rating-value');
+                if (label) label.textContent = `${average}/5`;
+            }
+
+            if (window.AuthUI && AuthUI.showNotification) {
+                AuthUI.showNotification('success', 'Evaluation enregistree');
+            }
+
+            refreshRewardSummary();
+            updateStatistics();
+            closeModal();
+        });
+    }
+
+    function computeRewardStats() {
+        const currentUser = getStoredUser();
+        const ratings = getChallengeRatings(currentUser);
+        const completedList = challenges.filter(challenge => (challenge.progress || 0) >= 100);
+        const totals = { difficulty: 0, speed: 0, creativity: 0 };
+
+        completedList.forEach(challenge => {
+            const rating = getChallengeRating(ratings, challenge._id);
+            totals.difficulty += rating.difficulty;
+            totals.speed += rating.speed;
+            totals.creativity += rating.creativity;
+        });
+
+        const count = completedList.length;
+        const averages = {
+            difficulty: count ? totals.difficulty / count : 0,
+            speed: count ? totals.speed / count : 0,
+            creativity: count ? totals.creativity / count : 0
+        };
+        const ratingAverage = count ? (averages.difficulty + averages.speed + averages.creativity) / 3 : 0;
+
+        return {
+            completedChallenges: count,
+            ratingAverage,
+            difficultyAverage: averages.difficulty,
+            speedAverage: averages.speed,
+            creativityAverage: averages.creativity,
+            completedList,
+            ratings
+        };
+    }
+
+    function buildAchievementsList(stats) {
+        const completed = stats.completedChallenges;
+        const difficulty = stats.difficultyAverage || 0;
+        const speed = stats.speedAverage || 0;
+        const creativity = stats.creativityAverage || 0;
+        const overall = stats.ratingAverage || 0;
+
+        return [
+            {
+                title: 'Premier defi termine',
+                description: 'Valider un premier succes pour entrer dans le systeme.',
+                unlocked: completed >= 1
+            },
+            {
+                title: 'Section d\'assaut',
+                description: 'Completer 5 defis pour marquer le rythme.',
+                unlocked: completed >= 5
+            },
+            {
+                title: 'Peloton solide',
+                description: 'Completer 10 defis avec constance.',
+                unlocked: completed >= 10
+            },
+            {
+                title: 'Execution eclair',
+                description: 'Rapidite moyenne de 4/5 ou plus.',
+                unlocked: speed >= 4 && completed >= 1
+            },
+            {
+                title: 'Creativite remarquable',
+                description: 'Creativite moyenne de 4/5 ou plus.',
+                unlocked: creativity >= 4 && completed >= 1
+            },
+            {
+                title: 'Mission a haute difficulte',
+                description: 'Difficulte moyenne de 4/5 ou plus.',
+                unlocked: difficulty >= 4 && completed >= 1
+            },
+            {
+                title: 'Trinite d\'excellence',
+                description: 'Atteindre 4.5/5 en moyenne globale.',
+                unlocked: overall >= 4.5 && completed >= 1
+            }
+        ];
+    }
+
+    function getRewardInsight(stats) {
+        if (!stats.completedChallenges) {
+            return 'Terminez un premier defi pour lancer votre progression.';
+        }
+
+        if (stats.ratingAverage >= 4.5) {
+            return 'Performance elite: vos defis sont executes avec precision.';
+        }
+
+        if (stats.ratingAverage >= 3.5) {
+            return 'Bon rythme: visez une note plus elevee pour grimper.';
+        }
+
+        return 'Chaque evaluation compte. Ajustez vos defis pour monter en grade.';
+    }
+
+    function renderRankLadder(rankSummary) {
+        if (!window.RankSystem) return;
+        const ladder = document.getElementById('rank-ladder-list');
+        if (!ladder) return;
+
+        const rows = RankSystem.getRanks().map(rank => {
+            const isActive = rankSummary.rank && rankSummary.rank.name === rank.name;
+            const isUnlocked = rankSummary.score >= rank.minScore;
+            const rowClass = `${isActive ? 'active' : ''} ${isUnlocked ? 'unlocked' : 'locked'}`.trim();
+            return `
+                <div class="rank-row ${rowClass}">
+                    <div class="rank-row-left">
+                        <img src="${rank.icon}" class="rank-icon" alt="Grade">
+                        <span>${rank.name}</span>
+                    </div>
+                    <span class="rank-score">${rank.minScore} pts</span>
+                </div>
+            `;
+        }).join('');
+
+        ladder.innerHTML = rows;
+    }
+
+    function refreshRewardSummary() {
+        const rewardStats = computeRewardStats();
+        const rankSummary = window.RankSystem
+            ? RankSystem.getScoreSummary(rewardStats)
+            : null;
+
+        const scoreEl = document.getElementById('reward-score');
+        if (scoreEl && rankSummary) {
+            scoreEl.textContent = `${rankSummary.score} pts`;
+        }
+
+        const difficultyEl = document.getElementById('reward-difficulty');
+        if (difficultyEl) difficultyEl.textContent = `${rewardStats.difficultyAverage.toFixed(1)}/5`;
+
+        const speedEl = document.getElementById('reward-speed');
+        if (speedEl) speedEl.textContent = `${rewardStats.speedAverage.toFixed(1)}/5`;
+
+        const creativityEl = document.getElementById('reward-creativity');
+        if (creativityEl) creativityEl.textContent = `${rewardStats.creativityAverage.toFixed(1)}/5`;
+
+        const insightEl = document.getElementById('reward-insight');
+        if (insightEl) insightEl.textContent = getRewardInsight(rewardStats);
+
+        const rankNameEl = document.getElementById('reward-rank-name');
+        if (rankNameEl && rankSummary) {
+            rankNameEl.textContent = rankSummary.rank.name;
+        }
+
+        const rankSubEl = document.getElementById('reward-rank-sub');
+        if (rankSubEl) {
+            rankSubEl.textContent = `${rewardStats.completedChallenges} defis termines`;
+        }
+
+        const nextEl = document.getElementById('rank-next-label');
+        if (nextEl && rankSummary) {
+            nextEl.textContent = rankSummary.nextRank
+                ? `Prochain grade: ${rankSummary.nextRank.name}`
+                : 'Sommet atteint';
+        }
+
+        const progressFill = document.getElementById('rank-progress-fill');
+        if (progressFill && rankSummary) {
+            progressFill.style.width = `${rankSummary.progress}%`;
+        }
+
+        const achievementsGrid = document.querySelector('.achievement-grid');
+        if (achievementsGrid) {
+            const achievements = buildAchievementsList(rewardStats);
+            achievementsGrid.innerHTML = achievements.map(item => {
+                const statusClass = item.unlocked ? 'achievement-card unlocked' : 'achievement-card locked';
+                const statusIcon = item.unlocked ? 'fa-medal' : 'fa-lock';
+                return `
+                    <div class="${statusClass}">
+                        <div class="achievement-icon"><i class="fas ${statusIcon}"></i></div>
+                        <div class="achievement-info">
+                            <h4>${item.title}</h4>
+                            <p>${item.description}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        if (rankSummary) {
+            renderRankLadder(rankSummary);
+        }
+
+        if (window.RankSystem) {
+            RankSystem.updateRankDisplay(rewardStats);
+        }
+    }
+
+    function attachRatingHandlers() {
+        const ratingCards = document.querySelectorAll('.rating-card');
+        if (!ratingCards.length) return;
+
+        const currentUser = getStoredUser();
+        const ratings = getChallengeRatings(currentUser);
+
+        ratingCards.forEach(card => {
+            const challengeId = card.dataset.challengeId;
+            const sliders = card.querySelectorAll('.rating-slider');
+
+            sliders.forEach(slider => {
+                slider.addEventListener('input', () => {
+                    const field = slider.dataset.field;
+                    const value = Number(slider.value);
+                    const rating = getChallengeRating(ratings, challengeId);
+
+                    rating[field] = value;
+                    ratings[challengeId] = rating;
+                    setChallengeRatings(currentUser, ratings);
+
+                    const valueEl = card.querySelector(`.rating-value[data-field="${field}"]`);
+                    if (valueEl) valueEl.textContent = value;
+
+                    const average = ((rating.difficulty + rating.speed + rating.creativity) / 3).toFixed(1);
+                    const badge = card.querySelector('.rating-badge');
+                    if (badge) badge.textContent = `${average}/5`;
+
+                    refreshRewardSummary();
+                });
+            });
+        });
+    }
+
     // Met à jour les statistiques
     function updateStatistics() {
-        if (challenges.length === 0) return;
+        if (challenges.length === 0) {
+            const totalEl = document.getElementById('stat-total');
+            const activeEl = document.getElementById('stat-active');
+            const completedEl = document.getElementById('stat-completed');
+            const progressEl = document.getElementById('stat-progress');
+            const progressValueEl = document.getElementById('summary-progress-value');
+            const progressBarEl = document.getElementById('summary-progress-bar');
+
+            if (totalEl) totalEl.textContent = '0';
+            if (activeEl) activeEl.textContent = '0';
+            if (completedEl) completedEl.textContent = '0';
+            if (progressEl) progressEl.textContent = '0%';
+            if (progressValueEl) progressValueEl.textContent = '0%';
+            if (progressBarEl) progressBarEl.style.width = '0%';
+            return;
+        }
         
         const totalChallenges = challenges.length;
         let activeChallenges = 0;
@@ -493,14 +1284,23 @@ function createChallengeSection() {
         });
         
         const averageProgress = Math.round(totalProgress / totalChallenges);
-        document.getElementById('stat-total').textContent = totalChallenges;
-        document.getElementById('stat-active').textContent = activeChallenges;
-        document.getElementById('stat-completed').textContent = completedChallenges;
-        document.getElementById('stat-progress').textContent = `${averageProgress}%`;
+        const totalEl = document.getElementById('stat-total');
+        const activeEl = document.getElementById('stat-active');
+        const completedEl = document.getElementById('stat-completed');
+        const progressEl = document.getElementById('stat-progress');
+        const progressValueEl = document.getElementById('summary-progress-value');
+        const progressBarEl = document.getElementById('summary-progress-bar');
+
+        if (totalEl) totalEl.textContent = totalChallenges;
+        if (activeEl) activeEl.textContent = activeChallenges;
+        if (completedEl) completedEl.textContent = completedChallenges;
+        if (progressEl) progressEl.textContent = `${averageProgress}%`;
+        if (progressValueEl) progressValueEl.textContent = `${averageProgress}%`;
+        if (progressBarEl) progressBarEl.style.width = `${averageProgress}%`;
         
-        // Mettre à jour le grade de l'utilisateur
+        const rewardStats = computeRewardStats();
         if (window.RankSystem) {
-            RankSystem.updateRankDisplay(completedChallenges);
+            RankSystem.updateRankDisplay(rewardStats);
         }
     }
 
@@ -510,6 +1310,14 @@ function createChallengeSection() {
         
         const ctx = document.getElementById('progress-chart');
         if (!ctx) return;
+
+        if (chartInstance) {
+            const currentCanvas = chartInstance.canvas;
+            if (!currentCanvas || !document.body.contains(currentCanvas) || currentCanvas !== ctx) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+        }
         
         try {
             // Au lieu de détruire et recréer le graphique à chaque fois
@@ -561,11 +1369,8 @@ function createChallengeSection() {
                             },
                             x: {
                                 grid: { display: false },
-                                ticks: { color: '#f0f0f0', maxRotation: 45, minRotation: 45 }
+                                ticks: { color: '#f0f0f0' }
                             }
-                        },
-                        plugins: {
-                            legend: { display: true, labels: { color: '#f0f0f0' } }
                         }
                     }
                 });
@@ -743,6 +1548,12 @@ async function createChallenge() {
 
     // Fonction pour mettre à jour un défi existant
     async function editChallenge(challenge) {
+        // Fermer les modals existantes avant d'ouvrir une nouvelle
+        const existingModals = document.querySelectorAll('.modal');
+        existingModals.forEach(modal => {
+            document.body.removeChild(modal);
+        });
+        
         const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
         if (!token) return;
         
@@ -877,6 +1688,12 @@ async function createChallenge() {
     // Modifiez la fonction updateChallengeProgress pour garantir la mise à jour en base de données
 
 async function updateChallengeProgress(challengeId, currentProgress) {
+    // Fermer les modals existantes avant d'ouvrir une nouvelle
+    const existingModals = document.querySelectorAll('.modal');
+    existingModals.forEach(modal => {
+        document.body.removeChild(modal);
+    });
+    
     const token = window.AuthUI ? AuthUI.getToken() : localStorage.getItem('token');
     if (!token) return;
     
@@ -1068,6 +1885,9 @@ async function updateChallengeProgress(challengeId, currentProgress) {
                     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
                     transition: transform 0.3s ease, box-shadow 0.3s ease;
                     border-top: 3px solid var(--medium-red);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 12px;
                 }
                 
                 .challenge-card:hover {
@@ -1080,6 +1900,13 @@ async function updateChallengeProgress(challengeId, currentProgress) {
                     justify-content: space-between;
                     align-items: flex-start;
                     margin-bottom: 10px;
+                }
+
+                .challenge-title-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
                 }
                 
                 .challenge-title {
@@ -1144,9 +1971,46 @@ async function updateChallengeProgress(challengeId, currentProgress) {
                     color: #aaa;
                 }
                 
-                .challenge-actions {
+                .challenge-card-actions {
                     display: flex;
                     gap: 5px;
+                }
+
+                .challenge-main {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                }
+
+                .challenge-meta {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    font-size: 12px;
+                    color: #aaa;
+                    border-top: 1px solid #333;
+                    padding-top: 12px;
+                }
+
+                .challenge-meta-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+
+                .challenge-pill {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    padding: 4px 8px;
+                    border-radius: 999px;
+                    letter-spacing: 0.6px;
+                    background: rgba(170, 0, 0, 0.2);
+                    color: var(--accent-gold);
+                }
+
+                .challenge-pill.status-completed {
+                    background: rgba(0, 170, 0, 0.2);
+                    color: #8ee08e;
                 }
                 
                 .icon-btn {
@@ -1222,6 +2086,213 @@ async function updateChallengeProgress(challengeId, currentProgress) {
                     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
                     border-left: 4px solid var(--accent-gold);
                 }
+
+                .page-header {
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: space-between;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                }
+
+                .challenges-header {
+                    margin: 20px 0 10px;
+                    padding: 20px;
+                    background: linear-gradient(120deg, rgba(136, 0, 0, 0.35), rgba(30, 30, 30, 0.9));
+                    border-radius: 14px;
+                    border: 1px solid rgba(212, 175, 55, 0.15);
+                }
+
+                .page-title h2 {
+                    margin: 6px 0 8px;
+                }
+
+                .eyebrow {
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    font-size: 12px;
+                    color: var(--accent-gold);
+                }
+
+                .page-subtitle {
+                    color: #c7c7c7;
+                    margin: 0;
+                }
+
+                .header-actions {
+                    display: flex;
+                    gap: 10px;
+                    align-items: center;
+                }
+
+                .challenge-summary {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    gap: 16px;
+                    margin: 20px 0;
+                }
+
+                .summary-card,
+                .summary-progress-card {
+                    background: var(--card-bg);
+                    border-radius: 12px;
+                    padding: 16px;
+                    border: 1px solid rgba(255, 255, 255, 0.06);
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+                }
+
+                .summary-label {
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    color: #aaa;
+                }
+
+                .summary-value {
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: var(--accent-gold);
+                }
+
+                .summary-progress-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 10px;
+                }
+
+                .summary-progress-bar {
+                    height: 10px;
+                    background: #2b2b2b;
+                    border-radius: 999px;
+                    overflow: hidden;
+                }
+
+                .summary-progress-fill {
+                    height: 100%;
+                    width: 0;
+                    background: linear-gradient(90deg, #aa0000, #d4af37);
+                    transition: width 0.3s ease;
+                }
+
+                .challenge-toolbar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 16px;
+                    flex-wrap: wrap;
+                    padding: 14px;
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                }
+
+                .challenge-toolbar input,
+                .challenge-toolbar select {
+                    margin: 0;
+                }
+
+                .toolbar-group {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+
+                .input-with-icon {
+                    position: relative;
+                }
+
+                .input-with-icon i {
+                    position: absolute;
+                    left: 12px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    color: #888;
+                }
+
+                .input-with-icon input {
+                    padding-left: 36px;
+                    min-width: 220px;
+                }
+
+                .view-toggle {
+                    display: flex;
+                    border-radius: 8px;
+                    border: 1px solid #333;
+                    overflow: hidden;
+                    background: #1c1c1c;
+                }
+
+                .view-btn {
+                    background: none;
+                    border: none;
+                    color: #aaa;
+                    padding: 8px 10px;
+                    cursor: pointer;
+                }
+
+                .view-btn.active {
+                    background: rgba(170, 0, 0, 0.4);
+                    color: #fff;
+                }
+
+                .ghost-btn {
+                    background: transparent;
+                    color: #ddd;
+                    border: 1px solid #444;
+                    padding: 8px 14px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                }
+
+                .ghost-btn:hover {
+                    border-color: var(--accent-gold);
+                    color: var(--accent-gold);
+                }
+
+                .challenge-list-info {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin: 12px 0;
+                    color: #aaa;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                }
+
+                .challenge-hint {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: #888;
+                    font-size: 13px;
+                }
+
+                .challenge-grid.is-list {
+                    grid-template-columns: 1fr;
+                }
+
+                .challenge-grid.is-list .challenge-card {
+                    display: flex;
+                    flex-direction: row;
+                    gap: 20px;
+                    align-items: stretch;
+                }
+
+                .challenge-grid.is-list .challenge-main {
+                    flex: 1;
+                }
+
+                .challenge-grid.is-list .challenge-meta {
+                    min-width: 200px;
+                    border-left: 1px solid #333;
+                    border-top: none;
+                    padding-left: 16px;
+                    padding-top: 0;
+                    justify-content: center;
+                }
                 
                 .form-group {
                     margin-bottom: 20px;
@@ -1275,6 +2346,17 @@ async function updateChallengeProgress(challengeId, currentProgress) {
                         flex-direction: column;
                         gap: 15px;
                     }
+
+                    .challenge-grid.is-list .challenge-card {
+                        flex-direction: column;
+                    }
+
+                    .challenge-grid.is-list .challenge-meta {
+                        border-left: none;
+                        border-top: 1px solid #333;
+                        padding-left: 0;
+                        padding-top: 12px;
+                    }
                 }
             `;
             document.head.appendChild(styleEl);
@@ -1291,6 +2373,11 @@ async function updateChallengeProgress(challengeId, currentProgress) {
 
     // Fonction pour afficher la modal de profil
     function showProfileModal() {
+        // Fermer les modals existantes avant d'ouvrir une nouvelle
+        if (document.querySelector('.modal')) {
+            document.body.removeChild(document.querySelector('.modal'));
+        }
+        
         const currentUser = getStoredUser();
         const username = currentUser.username || 'Utilisateur';
         const email = currentUser.email || '';
@@ -1304,6 +2391,8 @@ async function updateChallengeProgress(challengeId, currentProgress) {
         }
         
         const modal = document.createElement('div');
+        const previousFocus = document.activeElement;
+        const bodyOverflow = document.body.style.overflow;
         modal.className = 'modal';
         modal.innerHTML = `
             <div class="modal-content">
@@ -1363,12 +2452,45 @@ async function updateChallengeProgress(challengeId, currentProgress) {
             </div>
         `;
         
+        let cleanupAccessibility = () => {};
+        const closeModal = () => {
+            cleanupAccessibility();
+            document.body.style.overflow = bodyOverflow;
+            if (modal.parentNode) {
+                modal.parentNode.removeChild(modal);
+            }
+            if (previousFocus && typeof previousFocus.focus === 'function') {
+                previousFocus.focus();
+            }
+        };
+
         document.body.appendChild(modal);
+
+        document.body.style.overflow = 'hidden';
+
+        const modalContent = modal.querySelector('.modal-content');
+        const modalTitle = modal.querySelector('.modal-header h3');
+        const modalBody = modal.querySelector('.modal-body');
+        cleanupAccessibility = setupModalAccessibility(
+            modal,
+            modalContent,
+            modalTitle,
+            modalBody,
+            closeModal
+        );
         
         // Gérer le changement de photo de profil
         const photoInput = modal.querySelector('#profile-photo-input');
         const changePhotoBtn = modal.querySelector('#change-photo-btn');
         const imagePreview = modal.querySelector('#profile-image-preview');
+
+        const closeBtn = modal.querySelector('.close-btn');
+        if (closeBtn) {
+            closeBtn.setAttribute('aria-label', 'Fermer la fenetre de profil');
+        }
+        if (changePhotoBtn) {
+            changePhotoBtn.setAttribute('aria-label', 'Changer la photo de profil');
+        }
         
         changePhotoBtn.addEventListener('click', () => {
             photoInput.click();
@@ -1384,10 +2506,12 @@ async function updateChallengeProgress(challengeId, currentProgress) {
             }
         });
         
-        const closeModal = () => {
-            document.body.removeChild(modal);
-        };
-        
+        modal.addEventListener('click', (evt) => {
+            if (evt.target === modal) {
+                closeModal();
+            }
+        });
+
         modal.querySelector('.close-btn').addEventListener('click', closeModal);
         modal.querySelector('#cancel-profile').addEventListener('click', closeModal);
         
@@ -1417,8 +2541,15 @@ async function updateChallengeProgress(challengeId, currentProgress) {
     // Remplacez la fonction showSettingsModal() complète
 
 function showSettingsModal() {
-            const currentUser = getStoredUser();
+            // Fermer les modals existantes avant d'ouvrir une nouvelle
+        if (document.querySelector('.modal')) {
+            document.body.removeChild(document.querySelector('.modal'));
+        }
+        
+        const currentUser = getStoredUser();
     const modal = document.createElement('div');
+    const previousFocus = document.activeElement;
+    const bodyOverflow = document.body.style.overflow;
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content">
@@ -1473,14 +2604,44 @@ function showSettingsModal() {
         </div>
     `;
     
-    document.body.appendChild(modal);
-    
+    let cleanupAccessibility = () => {};
     const closeModal = () => {
-        if (document.querySelector('.modal')) {
-            document.body.removeChild(document.querySelector('.modal'));
+        cleanupAccessibility();
+        document.body.style.overflow = bodyOverflow;
+        if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+        if (previousFocus && typeof previousFocus.focus === 'function') {
+            previousFocus.focus();
         }
     };
+
+    document.body.appendChild(modal);
+
+    document.body.style.overflow = 'hidden';
+
+    const modalContent = modal.querySelector('.modal-content');
+    const modalTitle = modal.querySelector('.modal-header h3');
+    const modalBody = modal.querySelector('.modal-body');
+    cleanupAccessibility = setupModalAccessibility(
+        modal,
+        modalContent,
+        modalTitle,
+        modalBody,
+        closeModal
+    );
     
+    const closeBtn = modal.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.setAttribute('aria-label', 'Fermer la fenetre des parametres');
+    }
+
+    modal.addEventListener('click', (evt) => {
+        if (evt.target === modal) {
+            closeModal();
+        }
+    });
+
     modal.querySelector('.close-btn').addEventListener('click', closeModal);
     modal.querySelector('#cancel-settings').addEventListener('click', closeModal);
     
@@ -1488,8 +2649,7 @@ function showSettingsModal() {
         if (window.AuthUI && typeof AuthUI.handleLogout === 'function') {
             AuthUI.handleLogout();
         } else {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            localStorage.clear();
             window.location.reload();
         }
         closeModal();
@@ -1571,6 +2731,12 @@ function showSettingsModal() {
 
     // Fonction pour afficher la modal de changement de mot de passe
     function showChangePasswordModal() {
+        // Fermer les modals existantes avant d'ouvrir une nouvelle
+        const existingModals = document.querySelectorAll('.modal');
+        existingModals.forEach(modal => {
+            document.body.removeChild(modal);
+        });
+        
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.innerHTML = `
@@ -1720,86 +2886,287 @@ function showSettingsModal() {
             
             e.preventDefault();
             
-            // Retirer la classe active de tous les onglets
-            document.querySelectorAll('.navbar-link').forEach(link => {
-                link.classList.remove('active');
-            });
-            
-            // Ajouter la classe active à l'onglet cliqué
-            navLink.classList.add('active');
-            
             // Gérer l'affichage selon l'onglet
             const href = navLink.getAttribute('href');
             
             if (href === '#dashboard') {
                 showDashboard();
+            } else if (href === '#challenges') {
+                showChallengesTab();
+            } else if (href === '#achievements') {
+                showAchievementsTab();
             } else if (href === '#physique') {
                 showPhysiqueTab();
+            } else if (href === '#forum') {
+                showForumTab();
             }
-            // Les autres onglets seront implémentés plus tard
         });
+    }
+
+    function setActiveNavLink(href) {
+        document.querySelectorAll('.navbar-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        const activeLink = document.querySelector(`.navbar-link[href="${href}"]`);
+        if (activeLink) {
+            activeLink.classList.add('active');
+        }
     }
 
     // Afficher le tableau de bord (vue actuelle)
     function showDashboard() {
+        activeView = 'dashboard';
         createChallengeSection();
         loadChallenges();
     }
 
+    function showChallengesTab() {
+        activeView = 'challenges';
+        buildChallengesView();
+        loadChallenges();
+    }
+
+    function showAchievementsTab() {
+        activeView = 'achievements';
+        const challengeSection = document.getElementById('challenge-section');
+        if (!challengeSection) return;
+
+        const currentUser = getStoredUser();
+        const profilePhoto = getProfilePhoto(currentUser);
+        const rewardStats = computeRewardStats();
+        const rankSummary = window.RankSystem
+            ? RankSystem.getScoreSummary(rewardStats)
+            : {
+                score: 0,
+                rank: { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' },
+                nextRank: null,
+                progress: 0
+            };
+
+        const formattedDifficulty = rewardStats.difficultyAverage.toFixed(1);
+        const formattedSpeed = rewardStats.speedAverage.toFixed(1);
+        const formattedCreativity = rewardStats.creativityAverage.toFixed(1);
+
+        const rankList = window.RankSystem ? RankSystem.getRanks() : [];
+        const ladderRows = rankList.map(rank => {
+            const isActive = rankSummary.rank && rankSummary.rank.name === rank.name;
+            const isUnlocked = rankSummary.score >= rank.minScore;
+            const rowClass = `${isActive ? 'active' : ''} ${isUnlocked ? 'unlocked' : 'locked'}`.trim();
+            return `
+                <div class="rank-row ${rowClass}">
+                    <div class="rank-row-left">
+                        <img src="${rank.icon}" class="rank-icon" alt="Grade">
+                        <span>${rank.name}</span>
+                    </div>
+                    <span class="rank-score">${rank.minScore} pts</span>
+                </div>
+            `;
+        }).join('');
+
+        const adminRoles = window.RankSystem && typeof RankSystem.getAdminRoles === 'function'
+            ? RankSystem.getAdminRoles()
+            : [];
+        const adminRolesMarkup = adminRoles.map(role => {
+            const isActive = rankSummary.adminRole && rankSummary.adminRole.id === role.id;
+            return `
+                <div class="admin-role-card ${isActive ? 'active' : 'inactive'}">
+                    <div class="admin-role-badge"><i class="${role.icon}"></i></div>
+                    <h4>${role.title}</h4>
+                    <span class="admin-role-type">${role.type}</span>
+                </div>
+            `;
+        }).join('');
+
+        const achievements = buildAchievementsList(rewardStats);
+        const achievementsMarkup = achievements.map(item => {
+            const statusClass = item.unlocked ? 'achievement-card unlocked' : 'achievement-card locked';
+            const statusIcon = item.unlocked ? 'fa-medal' : 'fa-lock';
+            return `
+                <div class="${statusClass}">
+                    <div class="achievement-icon"><i class="fas ${statusIcon}"></i></div>
+                    <div class="achievement-info">
+                        <h4>${item.title}</h4>
+                        <p>${item.description}</p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const ratingCards = rewardStats.completedList.map(challenge => {
+            const rating = getChallengeRating(rewardStats.ratings, challenge._id);
+            const average = ((rating.difficulty + rating.speed + rating.creativity) / 3).toFixed(1);
+            const startDate = formatDate(challenge.startDate || challenge.createdAt) || 'Date inconnue';
+
+            return `
+                <div class="rating-card" data-challenge-id="${challenge._id}">
+                    <div class="rating-header">
+                        <div>
+                            <h4>${challenge.title}</h4>
+                            <span>${startDate}</span>
+                        </div>
+                        <div class="rating-badge">${average}/5</div>
+                    </div>
+                    <div class="rating-controls">
+                        <label>Difficulte <span class="rating-value" data-field="difficulty">${rating.difficulty}</span></label>
+                        <input class="rating-slider" type="range" min="1" max="5" step="1" value="${rating.difficulty}" data-field="difficulty">
+                        <label>Rapidite <span class="rating-value" data-field="speed">${rating.speed}</span></label>
+                        <input class="rating-slider" type="range" min="1" max="5" step="1" value="${rating.speed}" data-field="speed">
+                        <label>Creativite <span class="rating-value" data-field="creativity">${rating.creativity}</span></label>
+                        <input class="rating-slider" type="range" min="1" max="5" step="1" value="${rating.creativity}" data-field="creativity">
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        const ratingSection = rewardStats.completedList.length
+            ? ratingCards
+            : `
+                <div class="empty-state">
+                    <i class="fas fa-flag fa-3x"></i>
+                    <h3>Aucun défi terminé</h3>
+                    <p>Terminez un défi pour débloquer l'évaluation et les récompenses.</p>
+                </div>
+            `;
+
+        const content = buildNavbar('#achievements') + `
+
+            <div class="page-header achievements-header">
+                <div class="page-title">
+                    <span class="eyebrow">Espace de prestige</span>
+                    <h2>Récompenses & grades</h2>
+                    <p class="page-subtitle">Évaluez vos défis et progressez dans la hiérarchie.</p>
+                </div>
+                <div class="header-actions">
+                    <div class="reward-score">
+                        <span class="summary-label">Score global</span>
+                        <span class="summary-value" id="reward-score">${rankSummary.score} pts</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reward-grid">
+                <div class="reward-card highlight">
+                    <span class="summary-label">Grade actuel</span>
+                    <div class="reward-rank">
+                        <img src="${rankSummary.rank.icon}" alt="Grade">
+                        <div>
+                            <h3 id="reward-rank-name">${rankSummary.rank.name}</h3>
+                            <p id="reward-rank-sub">${rewardStats.completedChallenges} défis terminés</p>
+                        </div>
+                    </div>
+                    <div class="rank-progress">
+                        <div class="rank-progress-bar">
+                            <div id="rank-progress-fill" style="width: ${rankSummary.progress}%"></div>
+                        </div>
+                        <span id="rank-next-label">${rankSummary.nextRank ? `Prochain grade: ${rankSummary.nextRank.name}` : 'Sommet atteint'}</span>
+                    </div>
+                </div>
+                <div class="reward-card">
+                    <span class="summary-label">Evaluation moyenne</span>
+                    <div class="reward-metrics">
+                        <div>
+                            <span>Difficulte</span>
+                            <strong id="reward-difficulty">${formattedDifficulty}/5</strong>
+                        </div>
+                        <div>
+                            <span>Rapidite</span>
+                            <strong id="reward-speed">${formattedSpeed}/5</strong>
+                        </div>
+                        <div>
+                            <span>Creativite</span>
+                            <strong id="reward-creativity">${formattedCreativity}/5</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="reward-card">
+                    <span class="summary-label">Analyse rapide</span>
+                    <p class="reward-insight" id="reward-insight">${getRewardInsight(rewardStats)}</p>
+                </div>
+            </div>
+
+                ${adminRolesMarkup ? `
+                <div class="admin-roles-section">
+                    <div class="admin-roles-header">
+                        <h3><i class="fas fa-crown"></i> Roles administratifs</h3>
+                        <span class="admin-roles-note">Positions speciales de gestion.</span>
+                    </div>
+                    <div class="admin-roles-grid">
+                        ${adminRolesMarkup}
+                    </div>
+                </div>
+                ` : ''}
+
+            <div class="rank-ladder">
+                <div class="rank-ladder-header">
+                    <h3><i class="fas fa-shield"></i> Grille des grades</h3>
+                    <span class="rank-ladder-note">Basee sur difficulte, rapidite et creativite.</span>
+                </div>
+                <div class="rank-ladder-list" id="rank-ladder-list">
+                    ${ladderRows}
+                </div>
+            </div>
+
+            <div class="achievement-board">
+                <div class="achievement-board-header">
+                    <h3><i class="fas fa-medal"></i> Récompenses débloquées</h3>
+                    <span>${rewardStats.completedChallenges} défis terminés</span>
+                </div>
+                <div class="achievement-grid">
+                    ${achievementsMarkup}
+                </div>
+            </div>
+
+            <div class="rating-section">
+                <div class="rating-header-row">
+                    <h3><i class="fas fa-clipboard-check"></i> Évaluation des défis</h3>
+                    <span>Notez chaque defi termine pour affiner votre grade.</span>
+                </div>
+                <div class="rating-grid" id="rating-grid">
+                    ${ratingSection}
+                </div>
+            </div>
+        `;
+
+        challengeSection.innerHTML = content;
+
+        setActiveNavLink('#achievements');
+
+        if (window.AuthUI && AuthUI.getCurrentUser()) {
+            const userDisplay = document.getElementById('user-display');
+            if (userDisplay) {
+                const user = AuthUI.getCurrentUser();
+                userDisplay.textContent = user.username || user.email;
+            }
+        }
+
+        if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
+            AuthUI.setupEventListeners();
+        }
+
+        setupProfileMenu();
+        attachRatingHandlers();
+
+        if (window.RankSystem) {
+            RankSystem.updateRankDisplay(rewardStats);
+        }
+    }
+
     // Afficher l'onglet Physique
     function showPhysiqueTab() {
+        activeView = 'physique';
         const challengeSection = document.getElementById('challenge-section');
         if (!challengeSection) return;
         
         const currentUser = getStoredUser();
         const profilePhoto = getProfilePhoto(currentUser);
+        const rewardStats = computeRewardStats();
+        const rankSummary = window.RankSystem
+            ? RankSystem.getScoreSummary(rewardStats)
+            : {
+                rank: { name: 'Capitaine', icon: 'https://cdn-icons-png.flaticon.com/512/9241/9241203.png' }
+            };
 
-        const content = `
-            <div class="navbar">
-                <div class="navbar-logo">
-                    <img src="https://cdn-icons-png.flaticon.com/512/3575/3575443.png" alt="LionTrack">
-                    <h3>LionTrack</h3>
-                </div>
-                
-                <div class="navbar-links">
-                    <a href="#dashboard" class="navbar-link"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a>
-                    <a href="#challenges" class="navbar-link"><i class="fas fa-trophy"></i> Mes défis</a>
-                    <a href="#achievements" class="navbar-link"><i class="fas fa-medal"></i> Récompenses</a>
-                    <a href="#physique" class="navbar-link active"><i class="fas fa-dumbbell"></i> Physique</a>
-                </div>
-                
-                <div class="navbar-profile">
-                    <div class="profile-dropdown">
-                        <div class="profile-container">
-                            <div class="profile-image">
-                                <img src="${profilePhoto}" alt="Photo de profil">
-                            </div>
-                            <div class="profile-info">
-                                <span class="profile-name" id="user-display"></span>
-                                <div class="profile-rank">
-                                    <img src="https://cdn-icons-png.flaticon.com/512/9241/9241203.png" class="rank-insignia" alt="Grade">
-                                    <span>Capitaine</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="dropdown-menu">
-                            <div class="dropdown-item profile-item">
-                                <i class="fas fa-user-circle"></i>
-                                <span>Mon profil</span>
-                            </div>
-                            <div class="dropdown-item settings-item">
-                                <i class="fas fa-cog"></i>
-                                <span>Paramètres</span>
-                            </div>
-                            <div class="dropdown-item logout">
-                                <i class="fas fa-sign-out-alt"></i>
-                                <span>Déconnexion</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        const content = buildNavbar('#physique') + `
 
             <div class="stats-grid">
                 <div class="stat-card">
@@ -1841,6 +3208,7 @@ function showSettingsModal() {
         `;
         
         challengeSection.innerHTML = content;
+        setActiveNavLink('#physique');
         
         // Réafficher le nom d'utilisateur
         if (window.AuthUI && AuthUI.getCurrentUser()) {
@@ -2178,7 +3546,7 @@ function showSettingsModal() {
             card.innerHTML = `
                 <div class="challenge-header">
                     <h4 class="challenge-title">${weight.weight.toFixed(1)} kg</h4>
-                    <div class="challenge-actions">
+                    <div class="challenge-card-actions">
                         <button class="icon-btn edit-weight-btn" data-id="${weight._id}" data-weight="${weight.weight}" data-date="${weight.date}" data-note="${weight.note || ''}" title="Modifier">
                             <i class="fas fa-edit"></i>
                         </button>
@@ -2220,6 +3588,12 @@ function showSettingsModal() {
 
     // Modal pour ajouter une pesée
     function showAddWeightModal() {
+        // Fermer les modals existantes avant d'ouvrir une nouvelle
+        const existingModals = document.querySelectorAll('.modal');
+        existingModals.forEach(modal => {
+            document.body.removeChild(modal);
+        });
+        
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.innerHTML = `
@@ -2302,8 +3676,61 @@ function showSettingsModal() {
         });
     }
 
+    function showForumTab() {
+        activeView = 'forum';
+        const challengeSection = document.getElementById('challenge-section');
+        if (!challengeSection) return;
+
+        // Charger le contenu du forum depuis forum.js
+        const content = buildNavbar('#forum') + `
+            <div id="forum-app-container"></div>
+        `;
+
+        challengeSection.innerHTML = content;
+        setActiveNavLink('#forum');
+
+        if (window.AuthUI && AuthUI.getCurrentUser()) {
+            const userDisplay = document.getElementById('user-display');
+            if (userDisplay) {
+                const currentUser = AuthUI.getCurrentUser();
+                userDisplay.textContent = currentUser.username || currentUser.email;
+            }
+        }
+
+        if (window.AuthUI && typeof AuthUI.setupEventListeners === 'function') {
+            AuthUI.setupEventListeners();
+        }
+
+        setupProfileMenu();
+
+        // Initialiser le Forum depuis le fichier forum.js
+        if (window.ForumApp && typeof ForumApp.init === 'function') {
+            const container = document.getElementById('forum-app-container');
+            if (container) {
+                ForumApp.init(container);
+            }
+        } else {
+            console.warn('ForumApp non disponible. Vérifiez que forum.js est chargé.');
+            const container = document.getElementById('forum-app-container');
+            if (container) {
+                container.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: var(--text-color);">
+                        <p><i class="fas fa-exclamation-triangle" style="color: var(--light-red);"></i></p>
+                        <p>Le forum n'est pas disponible. Forum.js doit être chargé.</p>
+                    </div>
+                `;
+            }
+        }
+    }
+
     // Modal pour éditer une pesée
     function showEditWeightModal(weightId, currentWeight, currentDate, currentNote) {
+        // Fermer les modals existantes avant d'ouvrir une nouvelle
+        const existingModals = document.querySelectorAll('.modal');
+        existingModals.forEach(modal => {
+            document.body.removeChild(modal);
+        });
+        
         const modal = document.createElement('div');
         modal.className = 'modal';
         

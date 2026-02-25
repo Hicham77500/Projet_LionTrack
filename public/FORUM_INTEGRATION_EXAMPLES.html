@@ -1,0 +1,401 @@
+/**
+ * Exemple d'intégration du Forum dans l'application existante
+ * Copiez/adaptez cette section à votre index.html
+ */
+
+<!-- ======================================================================== -->
+<!-- 1. AJOUTER UN LIEN VERSION SIMPLE (Pour la navbar) -->
+<!-- ======================================================================== -->
+
+/* Dans votre navbar/header HTML */
+<nav class="navbar">
+  <!-- ... autres liens ... -->
+  
+  <a href="forum.html" class="nav-link" title="Communauté et discussions">
+    <i class="fas fa-comments"></i> Forum
+  </a>
+  
+  <!-- ... -->
+</nav>
+
+<!-- ======================================================================== -->
+<!-- 2. SECTION HOME PAGE - APPEL À L'ACTION -->
+<!-- ======================================================================== -->
+
+<section class="home-section community-preview">
+  <h2><i class="fas fa-users"></i> Rejoignez la Communauté</h2>
+  <p>Partagez votre parcours, posez des questions et motivez les autres !</p>
+  
+  <div class="community-cards">
+    <a href="forum.html" class="community-card">
+      <i class="fas fa-comments"></i>
+      <h3>Forum LionTrack</h3>
+      <p>Discussions, conseils et entraide</p>
+      <span class="badge">412 sujets</span>
+    </a>
+    
+    <a href="forum.html?category=results" class="community-card">
+      <i class="fas fa-trophy"></i>
+      <h3>Partage de Résultats</h3>
+      <p>Célébrez vos succès et victoires</p>
+      <span class="badge">234 contributions</span>
+    </a>
+    
+    <a href="forum.html?category=motivation" class="community-card">
+      <i class="fas fa-fire"></i>
+      <h3>Motivation Collective</h3>
+      <p>Restez motivés ensemble</p>
+      <span class="badge">156 discussions</span>
+    </a>
+  </div>
+</section>
+
+<!-- ======================================================================== -->
+<!-- 3. WIDGET MINI-FORUM (Pour dashboard) -->
+<!-- ======================================================================== -->
+
+<div class="mini-forum-widget">
+  <div class="widget-header">
+    <h3>
+      <i class="fas fa-fire"></i> Tendances du Forum
+    </h3>
+    <a href="forum.html" class="see-all">Voir tout</a>
+  </div>
+  
+  <ul class="trending-list" id="miniForumTrending">
+    <!-- Chargé dynamiquement via script -->
+  </ul>
+</div>
+
+<!-- Script pour charger les tendances -->
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Récupérer les tendances
+    const response = await fetch('/api/forum/trending?limit=3');
+    const trending = await response.json();
+    
+    const html = trending.map(subject => `
+      <li class="trending-mini">
+        <a href="forum.html?subject=${subject.id}">
+          <strong>${subject.title}</strong>
+          <small>${subject.replies || 0} réponses</small>
+        </a>
+      </li>
+    `).join('');
+    
+    const container = document.getElementById('miniForumTrending');
+    if (container) container.innerHTML = html;
+  } catch (error) {
+    console.error('Erreur mini-forum:', error);
+  }
+});
+</script>
+
+<!-- ======================================================================== -->
+<!-- 4. CSS ADDITIF POUR INTÉGRATION (Ajouter à votre CSS global) -->
+<!-- ======================================================================== -->
+
+<style>
+/* Community section */
+.community-preview {
+  background: linear-gradient(135deg, rgba(136, 0, 0, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  margin: 40px 0;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.community-preview h2 {
+  color: var(--accent-gold);
+  margin-bottom: 10px;
+}
+
+.community-preview p {
+  color: rgba(240, 240, 240, 0.7);
+  font-size: 1rem;
+  margin-bottom: 30px;
+}
+
+.community-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.community-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 25px 20px;
+  background-color: var(--card-bg);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 8px;
+  text-decoration: none;
+  color: white;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.community-card:hover {
+  border-color: var(--accent-gold);
+  background-color: rgba(212, 175, 55, 0.05);
+  transform: translateY(-5px);
+}
+
+.community-card i {
+  font-size: 2.5rem;
+  color: var(--light-red);
+  margin-bottom: 12px;
+}
+
+.community-card h3 {
+  color: white;
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+}
+
+.community-card p {
+  font-size: 0.9rem;
+  color: rgba(240, 240, 240, 0.6);
+  margin: 0 0 12px 0;
+}
+
+.community-card .badge {
+  background-color: rgba(204, 0, 0, 0.2);
+  color: var(--light-red);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Mini-forum widget */
+.mini-forum-widget {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.widget-header h3 {
+  margin: 0;
+  color: var(--accent-gold);
+  font-size: 1rem;
+}
+
+.see-all {
+  color: var(--light-red);
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.3s;
+}
+
+.see-all:hover {
+  color: var(--accent-gold);
+}
+
+.trending-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.trending-mini {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.trending-mini:last-child {
+  border-bottom: none;
+}
+
+.trending-mini a {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: white;
+  transition: color 0.3s;
+}
+
+.trending-mini a:hover {
+  color: var(--accent-gold);
+}
+
+.trending-mini strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.trending-mini small {
+  color: rgba(240, 240, 240, 0.5);
+  font-size: 0.8rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .community-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .community-preview {
+    padding: 30px 16px;
+  }
+}
+</style>
+
+<!-- ======================================================================== -->
+<!-- 5. INTÉGRATION DU LIEN DANS LE MENU (challenge-ui.js) -->
+<!-- ======================================================================== -->
+
+/* Dans challenge-ui.js, ajouter un bouton "Discuter dans le forum" */
+const discussInForum = (challengeId, challengeTitle) => {
+  const subject = `Défi: ${challengeTitle}`;
+  window.open(`forum.html?challenge=${challengeId}&title=${encodeURIComponent(subject)}`, '_blank');
+};
+
+// Ajouter button dans la carte de défi:
+/*
+<button onclick="discussInForum('${challenge.id}', '${challenge.name}')" class="btn-forum">
+  <i class="fas fa-comments"></i> Discuter
+</button>
+*/
+
+<!-- ======================================================================== -->
+<!-- 6. PARAMÈTRES D'URL (Query strings) -->
+<!-- ======================================================================== -->
+
+/*
+forum.html?category=1            // Ouvre une catégorie spécifique
+forum.html?category=results      // Ouvre "Partage de Résultats"
+forum.html?search=motivation     // Cherche "motivation"
+forum.html?subject=123           // Ouvre un sujet spécifique
+forum.html?sort=popular          // Trie par populaire
+forum.html?view=grid             // Mode grille
+forum.html?page=2                // Page 2
+*/
+
+// À implémenter dans forum.js :
+/*
+const parseQueryParams = () => {
+  const params = new URLSearchParams(window.location.search);
+  
+  if (params.get('category')) {
+    ForumApp.state.selectedCategory = params.get('category');
+  }
+  if (params.get('search')) {
+    ForumApp.DOM.searchInput.value = params.get('search');
+    ForumApp.state.searchQuery = params.get('search');
+  }
+  if (params.get('sort')) {
+    ForumApp.state.currentSort = params.get('sort');
+  }
+  if (params.get('view')) {
+    ForumApp.state.currentView = params.get('view');
+  }
+  if (params.get('subject')) {
+    // Ouvrir le sujet en modal
+  }
+};
+
+parseQueryParams();
+*/
+
+<!-- ======================================================================== -->
+<!-- 7. NOTIFICATIONS (Si vous avez un système) -->
+<!-- ======================================================================== -->
+
+/*
+// Dans AuthUI.js ou votre système de notifs
+const forumNotificationBadge = () => {
+  fetch('/api/forum/notifications/unread-count', {
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+  })
+  .then(res => res.json())
+  .then(data => {
+    const badge = document.getElementById('notificationBadge');
+    if (badge) {
+      badge.textContent = data.count || 0;
+      badge.style.display = data.count > 0 ? 'flex' : 'none';
+    }
+  });
+};
+
+// Vérifier chaque minute
+setInterval(forumNotificationBadge, 60000);
+*/
+
+<!-- ======================================================================== -->
+<!-- 8. MENU CONTEXTUEL (Pour partages) -->
+<!-- ======================================================================== -->
+
+/*
+// Ajouter dans challenge.html
+<div class="share-menu">
+  <button onclick="shareToCommunity('${challenge.id}')">
+    <i class="fas fa-share-alt"></i> Partager
+  </button>
+</div>
+
+<script>
+const shareToCommunity = (challengeId) => {
+  const options = [
+    { label: 'Forum', action: () => window.open(`forum.html?challenge=${challengeId}`) },
+    { label: 'Résultats', action: () => window.open(`forum.html?category=results`) },
+    { label: 'Copier lien', action: () => copyToClipboard(`${window.location.origin}/challenge/${challengeId}`) }
+  ];
+  
+  // Afficher menu contextuel
+};
+</script>
+*/
+
+<!-- ======================================================================== -->
+<!-- 9. SYNCHRONISATION UTILISATEUR -->
+<!-- ======================================================================== -->
+
+/*
+// Dans main.js ou app initializer
+document.addEventListener('AuthSuccessful', (event) => {
+  // L'utilisateur s'est connecté/inscrit
+  if (window.ForumApp) {
+    ForumApp.loadUserProfile();
+  }
+});
+
+document.addEventListener('AuthLogout', (event) => {
+  // L'utilisateur s'est déconnecté
+  localStorage.removeItem('forumPreferences');
+});
+*/
+
+<!-- ======================================================================== -->
+<!-- 10. TEST - Ouvrir forum depuis console -->
+<!-- ======================================================================== -->
+
+/*
+// Dans la console navigateur:
+window.open('forum.html', '_target');
+window.location.href = 'forum.html';
+
+// Ou tester avec mock data:
+localStorage.setItem('useForum', 'true');
+axios.get('/api/forum/subjects');  // Consultez la réponse
+*/

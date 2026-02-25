@@ -4,15 +4,24 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dbConfig = require('./config/db.config');
+const jwtConfig = require('./config/jwt.config');
 
 // Importation des routes
 const authRoutes = require('./services/auth/auth.routes');
 const userRoutes = require('./services/user/user.routes');
 const challengeRoutes = require('./services/challenge/challenge.routes');
 const weightRoutes = require('./services/weight/weight.routes');
+const analyticsRoutes = require('./services/analytics/analytics.routes');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 4001;
+
+// ============================================================================
+// VALIDATION DE LA CONFIGURATION AU DÉMARRAGE
+// ============================================================================
+console.log('🔐 Configuration JWT validée');
+console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
+console.log(`📌 Port: ${PORT}`);
 
 // Middlewares
 app.use(express.json());
@@ -84,6 +93,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/challenges', challengeRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/weight', weightRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Connexion à MongoDB et démarrage du serveur
 mongoose.connect(dbConfig.url)

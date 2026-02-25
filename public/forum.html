@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LionTrack Forum - Communauté et discussions">
+  <meta name="theme-color" content="#880000">
+  <title>Forum - LionTrack</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="css/lion-theme.css">
+  <link rel="stylesheet" href="css/accessibility-improvements.css">
+  <link rel="stylesheet" href="css/forum-styles.css">
+</head>
+<body>
+  <!-- Header avec search et profil -->
+  <header class="forum-header">
+    <div class="header-content">
+      <div class="header-left">
+        <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+          <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="forum-title">
+          <i class="fas fa-comments"></i> Forum
+        </h1>
+      </div>
+
+      <div class="header-search">
+        <input 
+          type="search" 
+          class="search-input" 
+          id="searchInput" 
+          placeholder="Rechercher des sujets..."
+          aria-label="Rechercher des sujets"
+        >
+        <button class="search-btn" aria-label="Rechercher">
+          <i class="fas fa-search"></i>
+        </button>
+      </div>
+
+      <div class="header-right">
+        <button class="notifications-btn" id="notificationsBtn" aria-label="Notifications">
+          <i class="fas fa-bell"></i>
+          <span class="notification-badge" id="notificationBadge">0</span>
+        </button>
+
+        <div class="profile-section" id="profileSection">
+          <div class="profile-container" id="profileContainer" aria-label="Profile menu">
+            <img class="profile-avatar" id="profileAvatar" src="" alt="Avatar">
+            <div class="profile-info">
+              <div class="profile-name" id="profileName">Utilisateur</div>
+              <div class="profile-rank">
+                <span class="grade-badge" id="profileGrade">USER</span>
+              </div>
+            </div>
+          </div>
+          <div class="dropdown-menu" id="profileDropdown">
+            <a href="index.html" class="dropdown-item">
+              <i class="fas fa-home"></i> Accueil
+            </a>
+            <a href="#" class="dropdown-item" id="profileLink">
+              <i class="fas fa-user"></i> Mon Profil
+            </a>
+            <a href="#" class="dropdown-item" id="settingsLink">
+              <i class="fas fa-cog"></i> Paramètres
+            </a>
+            <hr style="margin: 5px 0; border: none; border-top: 1px solid rgba(255,255,255,0.1);">
+            <button class="dropdown-item" id="logoutBtn" style="border: none; background: none; width: 100%; text-align: left; cursor: pointer;">
+              <i class="fas fa-sign-out-alt"></i> Déconnexion
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="forum-container">
+    <!-- Sidebar -->
+    <aside class="forum-sidebar" id="forumSidebar">
+      <div class="sidebar-close" id="sidebarClose">
+        <i class="fas fa-times"></i>
+      </div>
+
+      <!-- Catégories -->
+      <div class="sidebar-section">
+        <h3 class="sidebar-title">
+          <i class="fas fa-th"></i> Catégories
+        </h3>
+        <ul class="categories-list" id="categoriesList">
+          <li>
+            <a href="#" class="category-item active" data-category="all">
+              <i class="fas fa-star"></i> Tous les sujets
+              <span class="category-count">0</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Top sujets (Tendances) -->
+      <div class="sidebar-section">
+        <h3 class="sidebar-title">
+          <i class="fas fa-fire"></i> Tendances
+        </h3>
+        <div class="trending-items" id="trendingList">
+          <!-- Chargement dynamique -->
+        </div>
+      </div>
+
+      <!-- Filtres -->
+      <div class="sidebar-section">
+        <h3 class="sidebar-title">
+          <i class="fas fa-filter"></i> Filtres
+        </h3>
+        <div class="filters">
+          <button class="filter-btn active" data-sort="recent">
+            <i class="fas fa-clock"></i> Récent
+          </button>
+          <button class="filter-btn" data-sort="popular">
+            <i class="fas fa-chart-line"></i> Populaire
+          </button>
+          <button class="filter-btn" data-sort="unanswered">
+            <i class="fas fa-question-circle"></i> Sans réponse
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Contenu principal -->
+    <main class="forum-main">
+      <!-- Mode d'affichage -->
+      <div class="view-controls">
+        <button class="view-btn active" data-view="list" aria-label="Affichage liste">
+          <i class="fas fa-list"></i>
+        </button>
+        <button class="view-btn" data-view="grid" aria-label="Affichage grille">
+          <i class="fas fa-th-large"></i>
+        </button>
+      </div>
+
+      <!-- États -->
+      <div class="state-container">
+        <!-- Loading -->
+        <div class="state loading-state" id="loadingState">
+          <div class="spinner"></div>
+          <p>Chargement des sujets...</p>
+        </div>
+
+        <!-- Erreur -->
+        <div class="state error-state hidden" id="errorState">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p id="errorMessage">Une erreur s'est produite</p>
+          <button class="retry-btn" id="retryBtn">Réessayer</button>
+        </div>
+
+        <!-- Pas de résultats -->
+        <div class="state no-results-state hidden" id="noResultsState">
+          <i class="fas fa-inbox"></i>
+          <p>Aucun sujet trouvé</p>
+          <p class="empty-hint">Soyez le premier à créer un sujet !</p>
+        </div>
+
+        <!-- Liste de sujets -->
+        <div class="subjects-list" id="subjectsList" role="list">
+          <!-- Sujets chargés dynamiquement -->
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination" id="pagination">
+        <button class="pagination-btn" id="prevPage" disabled>
+          <i class="fas fa-chevron-left"></i> Précédent
+        </button>
+        <span class="page-info" id="pageInfo">Page 1</span>
+        <button class="pagination-btn" id="nextPage">
+          Suivant <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Formulaire nouveau sujet (Floating) -->
+  <div class="new-subject-fab" id="newSubjectFab" role="button" tabindex="0" aria-label="Nouveau sujet">
+    <i class="fas fa-plus"></i>
+  </div>
+
+  <!-- Modal nouveau sujet -->
+  <div class="modal hidden" id="newSubjectModal">
+    <div class="modal-overlay" id="modalOverlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Nouveau sujet</h2>
+        <button class="modal-close" id="modalClose" aria-label="Fermer">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <form class="new-subject-form" id="newSubjectForm">
+        <div class="form-group">
+          <label for="subjectCategory">Catégorie *</label>
+          <select id="subjectCategory" required>
+            <option value="">Choisir une catégorie...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="subjectTitle">Titre du sujet *</label>
+          <input 
+            type="text" 
+            id="subjectTitle" 
+            placeholder="Un titre clair et descriptif..."
+            maxlength="200"
+            required
+          >
+          <small id="titleCounter">0/200</small>
+        </div>
+
+        <div class="form-group">
+          <label for="subjectMessage">Message *</label>
+          <textarea 
+            id="subjectMessage"
+            placeholder="Décrivez votre sujet..."
+            rows="6"
+            maxlength="5000"
+            required
+          ></textarea>
+          <small id="messageCounter">0/5000</small>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="subjectNotifications">
+            Recevoir les notifications de ce sujet
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button type="reset" class="btn-secondary">Annuler</button>
+          <button type="submit" class="btn-primary">Publier le sujet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal détails sujet -->
+  <div class="modal hidden" id="subjectDetailModal">
+    <div class="modal-overlay" id="detailModalOverlay"></div>
+    <div class="modal-content modal-detail">
+      <div class="modal-header">
+        <h2 id="detailTitle"></h2>
+        <button class="modal-close" id="detailModalClose" aria-label="Fermer">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="modal-body" id="detailContent">
+        <!-- Contenu du sujet -->
+      </div>
+
+      <div class="modal-actions" id="detailModalActions">
+        <!-- Actions modérateur si applicable -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications toast -->
+  <div class="notifications-container" id="notificationsContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/forum.js"></script>
+</body>
+</html>
